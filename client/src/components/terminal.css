@@ -56,7 +56,11 @@
 .widget-menu ul{ list-style:none; margin:0; padding:0; }
 .widget-menu li{ margin:6px 0; }
 
+/* Widget item layout */
 .widget-menu button{
+  display:flex;
+  gap:10px;
+  align-items:center;
   width:100%;
   text-align:left;
   background: transparent;
@@ -67,17 +71,51 @@
   cursor:pointer;
 }
 
-.widget-menu button:hover{
-  background: rgba(0,255,65,0.03);
-  box-shadow: inset 0 0 6px rgba(0,255,65,0.02);
+.widget-icon{
+  font-size:18px;
+  width:28px;
+  text-align:center;
+  color: var(--neon-dim);
 }
 
-.widget-menu [aria-label="Close"]{
-  margin-top:8px;
-  display:inline-block;
-  background:transparent;
-  color:var(--muted);
+.widget-label{
+  flex:1;
+  font-weight:600;
 }
+
+.widget-key{
+  color: rgba(0,255,65,0.5);
+  font-size:12px;
+}
+
+/* Highlight / selected state */
+.widget-menu button:hover, .widget-menu button:focus{
+  background: linear-gradient(90deg, rgba(0,255,65,0.03), rgba(0,255,65,0.02));
+  transform: translateY(-1px);
+}
+
+.widget-menu button:active{
+  transform: translateY(0);
+}
+
+/* Accessibility: focus ring for keyboard nav */
+.widget-menu button:focus{
+  outline: 2px solid rgba(0,255,65,0.14);
+  box-shadow: 0 4px 12px rgba(0,255,65,0.03);
+}
+
+/* Responsive adjustments */
+@media (max-width:480px){
+  .widget-menu{ min-width:160px; padding:8px; }
+  .widget-label{ font-size:13px; }
+  .widget-key{ display:none; }
+}
+
+/* Subtle separators */
+.widget-menu li + li{ border-top: 1px solid rgba(0,255,65,0.02); margin-top:6px; padding-top:6px; }
+
+/* Small improvement for close button */
+.widget-menu [aria-label="Close"]{ color: var(--neon-dim); border-radius:4px; padding:6px 8px; }
 
 /* Stickman guide */
 .stickman-guide{
