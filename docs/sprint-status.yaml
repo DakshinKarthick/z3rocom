@@ -1,0 +1,56 @@
+# generated: 2025-11-11
+# project: Z3roCom
+# project_key: Z3roCom
+# tracking_system: file-system
+# story_location: {project-root}/docs/stories
+
+# STATUS DEFINITIONS:
+# Epic Status: backlog, contexted
+# Story Status: backlog, drafted, ready-for-dev, in-progress, review, done
+
+development_status:
+  epic-1: contexted
+  1-1-terminal-style-chat-interface: ready-for-dev
+  1-2-basic-room-creation-and-joining: backlog
+  1-3-real-time-messaging-with-socket-io: backlog
+  1-4-time-based-room-booking-system: backlog
+
+  epic-2: backlog
+  2-1-command-detection-and-widget-menu: backlog
+  2-2-widget-container-modal-system: backlog
+  2-3-widget-deployment-to-chat: backlog
+  2-4-basic-music-widget-spotify-integration: backlog
+
+  epic-3: backlog
+  3-1-agenda-setting-command: backlog
+  3-2-agenda-conflict-resolution: backlog
+  3-3-progress-tracking-system: backlog
+  3-4-stickman-guide-integration: backlog
+
+  epic-4: backlog
+  4-1-github-oauth-authentication: backlog
+  4-2-project-widget-with-repository-information: backlog
+  4-3-project-collaboration-requests: backlog
+
+  epic-5: backlog
+  5-1-gaming-style-room-browser: backlog
+  5-2-live-room-status-updates: backlog
+  5-3-quick-room-creation-from-lobby: backlog
+
+  epic-6: backlog
+  6-1-poll-widget-for-team-decisions: backlog
+  6-2-enhanced-music-collaboration: backlog
+  6-3-widget-interaction-analytics: backlog
+
+  epic-7: backlog
+  7-1-real-time-performance-optimization: backlog
+  7-2-production-monitoring-and-error-handling: backlog
+  7-3-mobile-responsiveness: backlog
+  # retrospectives
+  epic-1-retrospective: optional
+  epic-2-retrospective: optional
+  epic-3-retrospective: optional
+  epic-4-retrospective: optional
+  epic-5-retrospective: optional
+  epic-6-retrospective: optional
+  epic-7-retrospective: optional

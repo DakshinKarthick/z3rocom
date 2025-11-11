@@ -1,0 +1,57 @@
+<storyContext>
+  <metadata>
+    <storyKey>1-1-terminal-style-chat-interface</storyKey>
+    <storyId>1.1</storyId>
+    <title>Terminal-style Chat Interface</title>
+    <epic>epic-1</epic>
+    <generatedBy>SM agent</generatedBy>
+    <generatedAt>2025-11-11</generatedAt>
+  </metadata>
+
+  <as_a>As a developer</as_a>
+  <i_want>A neon-styled chat interface with monospace fonts</i_want>
+  <so_that>The chat feels authentic to my terminal environment</so_that>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Z3roCom Product Requirements Document</title>
+        <section>Core Terminal Interface</section>
+        <snippet>Terminal-style input with `/` command system for widget deployment; Socket.IO integration for instant messaging and widget updates.</snippet>
+      </doc>
+      <doc>
+        <path>docs/UX-Design.md</path>
+        <title>UX Design</title>
+        <section>Widget Menu Interaction</section>
+        <snippet>Visual widget menu appears when users type `/`; terminal/hacker theme with neon colors and monospace fonts; keyboard navigation required.</snippet>
+      </doc>
+      <doc>
+        <path>docs/Epic-Story-Breakdown.md</path>
+        <title>Epic & Story Breakdown</title>
+        <section>Story 1.1: Terminal-Style Chat Interface</section>
+        <snippet>Chat interface uses neon green (#00ff41) on black (#000000); JetBrains Mono or Fira Code fonts; terminal-style cursor and HH:MM:SS timestamps.</snippet>
+      </doc>
+    </docs>
+
+    <code>
+      <note>No specific source modules located under project src paths matching this story's keywords. Check client/src and server/src for components named TerminalInput or WidgetMenu.</note>
+      <hint>Detected empty package.json files at project root subfolders; confirm dependency manifests if implementation will require new packages.</hint>
+    </code>
+
+    <dependencies>
+      <note>No dependency information found in client/package.json or server/package.json (files are empty).</note>
+    </dependencies>
+
+    <tests>
+      <standards>None discovered in repository; recommend unit tests for TerminalInputComponent and integration/e2e for widget flow.</standards>
+      <locations>Recommended tests directory: tests/ or client/tests/</locations>
+    </tests>
+
+    <constraints>
+      <constraint>Follow architecture guidance in docs/architecture.md for component placement and Socket.IO integration.</constraint>
+      <constraint>Maintain accessibility: focus management, keyboard navigation, screen-reader labels.</constraint>
+    </constraints>
+  </artifacts>
+
+</storyContext>
