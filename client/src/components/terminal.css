@@ -1,0 +1,106 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root{
+  --bg:#000000;
+  --neon:#00ff41;
+  --neon-dim:#33ff77;
+  --muted:#889299;
+}
+
+/* Global terminal canvas */
+.terminal-input, .widget-menu, .stickman-guide {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace;
+  color: var(--neon);
+}
+
+/* Input area */
+.terminal-input{
+  background: linear-gradient(180deg, rgba(0,0,0,0.95), rgba(5,5,5,1));
+  padding: 8px;
+  border-radius: 6px;
+  box-shadow: 0 0 12px rgba(0,255,65,0.06);
+  display:flex;
+  align-items:center;
+}
+
+.terminal-input input{
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--neon);
+  caret-color: var(--neon);
+  font-family: inherit;
+  font-size: 14px;
+  width:100%;
+  padding: 8px 10px;
+}
+
+/* Blinking faux-caret for display when input empty */
+.terminal-input input::placeholder{
+  color: rgba(0,255,65,0.45);
+}
+
+/* Widget menu overlay */
+.widget-menu{
+  position: absolute;
+  margin-top:8px;
+  background: rgba(2,8,2,0.98);
+  border: 1px solid rgba(0,255,65,0.08);
+  padding:12px;
+  border-radius:6px;
+  min-width:220px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6), 0 0 18px rgba(0,255,65,0.06);
+  z-index: 1000;
+}
+
+.widget-menu ul{ list-style:none; margin:0; padding:0; }
+.widget-menu li{ margin:6px 0; }
+
+.widget-menu button{
+  width:100%;
+  text-align:left;
+  background: transparent;
+  color: var(--neon);
+  border: none;
+  padding:8px 10px;
+  border-radius:4px;
+  cursor:pointer;
+}
+
+.widget-menu button:hover{
+  background: rgba(0,255,65,0.03);
+  box-shadow: inset 0 0 6px rgba(0,255,65,0.02);
+}
+
+.widget-menu [aria-label="Close"]{
+  margin-top:8px;
+  display:inline-block;
+  background:transparent;
+  color:var(--muted);
+}
+
+/* Stickman guide */
+.stickman-guide{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  background: rgba(0,0,0,0.6);
+  padding:8px;
+  border-radius:6px;
+  border:1px solid rgba(0,255,65,0.04);
+}
+
+.stickman-guide .stickman{
+  width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--neon-dim);
+}
+
+.stickman-guide .message{ color: var(--neon); font-size:13px; }
+
+/* Accessibility focus */
+.widget-menu button:focus, .terminal-input input:focus{ outline: 2px solid rgba(0,255,65,0.12); outline-offset:2px; }
+
+/* Terminal timestamp style example (for story ACs) */
+.timestamp{
+  color: rgba(0,255,65,0.65);
+  font-size:12px;
+}

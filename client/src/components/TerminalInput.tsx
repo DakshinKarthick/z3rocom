@@ -1,31 +1,30 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import WidgetMenu from './WidgetMenu';
+import './terminal.css';
 
-export default function TerminalInput({ onSend }) {
+export default function TerminalInput({ onSend }: { onSend?: (payload: string) => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const inputRef = useRef(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.key === '/') {
-        // open menu and prevent default typing of '/'
-        e.preventDefault();
-        setMenuOpen(true);
-      }
-    };
-    const el = inputRef.current;
-    if (el) el.addEventListener('keydown', handler);
-    return () => { if (el) el.removeEventListener('keydown', handler); };
-  }, []);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === '/') {
+      e.preventDefault();
+      setMenuOpen(true);
+    }
+  };
 
   return (
-    <div className="terminal-input">
-      <input ref={inputRef} aria-label="Chat input" placeholder="Type a message..." />
+    <div className="terminal-input" style={{ position: 'relative' }}>
+      <input
+        ref={inputRef}
+        aria-label="Chat input"
+        placeholder="Type a message..."
+        onKeyDown={handleKeyDown}
+      />
       {menuOpen && (
         <WidgetMenu
           onClose={() => setMenuOpen(false)}
           onSelect={(payload) => {
-            // insert payload into input and close
             if (inputRef.current) {
               inputRef.current.value = payload;
               inputRef.current.focus();
