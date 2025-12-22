@@ -1,666 +1,149 @@
-# Z3roCom Scale Adaptive Architecture
+# Z3roCom System Architecture
 
-**Project:** Z3roCom - Developer-focused Chat Application  
-**Date:** 2025-11-10  
-**Architect:** Winston  
-**Version:** 1.0
+**Project:** Z3roCom — Focus-first Session Collaboration  
+**Version:** 2.0 | **Date:** 2025-12-22
 
-## 1. Architectural Context
+## Overview
+Z3roCom is a session-based collaboration platform enforcing focus through timeboxed sessions, mandatory agendas, and 10 specialized widgets. Sessions auto-end with AI-generated summaries. Built for developers, students, and remote teams requiring structured, outcome-driven collaboration.
 
-### System Overview
-Z3roCom is a brownfield enhancement of existing Next.js/Fastify/Socket.IO stack, adding revolutionary chat productivity features:
-- **Widget system** with individual user responses and chat deployment
-- **Real-time state synchronization** for progress tracking and room management  
-- **Gaming lobby interface** with live room status updates
-- **Agenda management** with multi-user editing conflict resolution
+**Core Philosophy:** Widget-first (shared state), session-scoped (ephemeral), AI-facilitated (event-driven, non-intrusive).
 
-### Existing Foundation (Brownfield)
-- **Frontend:** Next.js application with React components
-- **Backend:** Fastify/Express server with REST endpoints  
-- **Real-time:** Socket.IO for bidirectional communication
-- **Database:** Progressive strategy - SQLite for development, PostgreSQL for production (see Decision 3)
+## Technology Stack
+**Frontend:** Next.js, React, TypeScript | **Backend:** Fastify, Socket.IO, TypeScript | **Database:** Prisma ORM with SQLite (dev) and PostgreSQL (prod) | **Real-Time:** Socket.IO rooms per session
 
-### Key Architectural Drivers
-1. **Real-time Synchronization:** Progress bars, agenda status, room lobby require live updates
-2. **Conflict Resolution:** Multiple users editing agenda simultaneously
-3. **Widget Isolation:** Individual widget responses (no real-time collaboration needed)
-4. **Gaming Aesthetics:** Lobby interface with server browser feel
-5. **Brownfield Integration:** Seamless integration with existing codebase
+## System Components
 
-## 2. Technology Stack & Versions
+### 1. Session Service
+Manages session lifecycle: creation, timer (25/45/90 min presets, min 15, max 120), participant limits (max 10), auto-end. Owns agenda enforcement and role-based permissions (admin = creator).
 
-### Core Technology Versions (Verified 2025-11-11)
+### 2. Widget Service  
+Registry and CRUD for 10 widget types: `timer|agenda|tasks|decision|blocker|code|progress|distraction|next|summary`. Handles state sync via Socket.IO; persists to Prisma `Widgets(id, session_id, type, state_json, created_by, created_at)`.
+
+### 3. Enforcement Service
+Tracks message count and elapsed time. **Soft lock** (6 msgs AND 3 min): disables `/tasks`, `/decision`, `/blocker`, `/progress`; shows banner. **Hard lock** (10 msgs OR 6 min): blocks new messages until agenda set. Enforces admin-only agenda edits and capacity limits.
+
+### 4. AI Orchestrator
+**Event-driven triggers:** Session start, timer midpoint, drift threshold, session end. **Inputs:** Chat transcript + widget states (read-only). **Outputs:** Distraction meter updates (visual only), outcome summary (mandatory, structured), next-session seed (optional). **Never posts chat messages.**
+
+### 5. Persistence Layer
+Prisma models: `Sessions, Participants, Widgets, Decisions, Blockers, ProgressEntries, Summaries`. SQLite dev, PostgreSQL prod.
+
+## Data Flow
+
+**Session Creation:** `/start 45m` → Backend creates Session + Timer widget → Emits `session:start` → Frontend renders SessionProvider with Socket connection.
+
+**Widget Interaction:** User interacts → Frontend emits `widget:update` (optimistic) → Backend validates → Broadcasts to all clients in room → SessionProvider updates state → UI re-renders.
+
+**AI Analysis:** Enforcement Service detects drift → AI Orchestrator compares messages to agenda (embeddings) → Updates Distraction Meter widget → Frontend displays visual indicator.
+
+**Session End:** Timer hits zero OR admin ends → Backend emits `session:end` → AI collects all widget states → Generates Outcome Summary → Modal blocks UI (non-dismissable) → User closes → Chat locked.
+
+**Chat Message Flow:** User types message → Frontend emits `chat:message` → Backend validates and stores → Broadcasts `chat:message` to all clients → UI appends message to stream.
+
+## UI Architecture
+
+**Component Hierarchy:**
 ```
-Frontend Stack:
-├── Next.js: 16.0.1 (latest stable)
-├── React: 19.x (bundled with Next.js 16)
-├── TypeScript: 5.x (latest stable)
-└── TailwindCSS: 3.x (for terminal styling)
-
-Backend Stack:
-├── Fastify: 5.6.2 (latest stable)  
-├── Socket.IO: 4.8.1 (latest stable)
-├── Node.js: 20.x LTS (recommended)
-└── TypeScript: 5.x (consistent with frontend)
-
-Database & Cache:
-├── PostgreSQL: 18.x (latest stable release)
-├── Redis: 7.x (latest stable)
-├── SQLite: 3.x (development environment)
-└── Prisma: 5.x (ORM for database management)
-
-Development Tools:
-├── Jest: 29.x (testing framework)
-├── ESLint: 9.x (code linting)
-├── Prettier: 3.x (code formatting)
-└── Playwright: 1.x (E2E testing)
+SessionPage
+├─ SessionProvider (Context: state, Socket.IO)
+│  ├─ Header (Agenda + Timer, sticky)
+│  ├─ MainContent (MessageStream + WidgetRenderer + EnforcementBanner)
+│  ├─ RightRail (DistractionMeter + DecisionsAndBlockers + ProgressRollup)
+│  └─ Footer (Input + CommandPalette)
 ```
 
-### Version Compatibility Matrix
-- **Node.js 20.x LTS** supports all chosen packages
-- **Next.js 16.x** requires React 19.x (bundled)
-- **Fastify 5.x** compatible with Socket.IO 4.x
-- **PostgreSQL 18.x** supported by Prisma 5.x
-- **Redis 7.x** compatible with Node.js Redis client 5.x
+**State Management:** `useReducer` in SessionProvider centralizes Socket events. Widgets use local state for UI; emit events for persistence. Custom `useSocket(event, callback)` hook for subscriptions.
 
-## 3. Project Initialization & Setup
+**Widget Rendering:** WidgetRenderer maps `type` enum → React component (`timer` → `<TimerWidget />`) → Passes `state_json` as props.
 
-### Development Environment Setup
-```bash
-# Prerequisites (verify versions)
-node --version  # Should be 20.x LTS
-npm --version   # Should be 10.x
+## AI Integration Points
 
-# Clone existing repository (brownfield)
-cd existing-project
+1. **Distraction Meter (Widget 3):** Semantic similarity analysis (embeddings: agenda vs. messages). Threshold >60 triggers update. Visual-only, no chat.
+2. **Blocker Reminders (Widget 6):** At 80% elapsed time, checks unresolved blockers → Emits subtle nudge.
+3. **Progress Aggregation (Widget 8):** Synthesizes per-participant responses for summary.
+4. **Outcome Summary (Widget 9):** Core AI feature. Reads all widgets (agenda, tasks, decisions, blockers, progress) → Generates structured markdown with sections (Agenda, Tasks Completed, Decisions, Blockers, Next Steps). Neutral tone, deterministic structure.
+5. **Next Session Seeder (Widget 10):** Analyzes unresolved blockers and progress → Suggests agenda and duration for next session.
 
-# Install frontend dependencies
-cd client
-npm install next@16.0.1 react@19 typescript@5 tailwindcss@3
-npm install @types/react @types/node
+## Enforcement Rules
 
-# Install backend dependencies  
-cd ../server
-npm install fastify@5.6.2 socket.io@4.8.1 prisma@5
-npm install @types/node typescript ts-node
+**Soft Enforcement (6 msgs AND 3 min):** Banner "Set an agenda to continue effectively" (non-dismissable). Disables `/tasks`, `/decision`, `/blocker`, `/progress`. Chat still allowed.
 
-# Install shared dependencies
-cd ../shared
-npm install typescript@5
+**Hard Enforcement (10 msgs OR 6 min):** Blocks new messages until `/agenda` set. Input disabled; banner persists.
 
-# Database setup
-npx prisma init
-npx prisma migrate dev --name init
+**Timer Enforcement:** Required to start work. Pause/resume admin-only. Auto-end triggers summary (mandatory, non-skippable).
 
-# Start development servers
-npm run dev:client   # Next.js on port 3000
-npm run dev:server   # Fastify on port 5000
-```
+**Capacity Enforcement:** Max 10 participants. Join denied beyond limit.
 
-### Project Structure Enhancement
-```
-Z3roCom/ (existing brownfield project)
-├── client/ (existing Next.js app)
-│   ├── package.json (update with new dependencies)
-│   ├── src/
-│   │   ├── components/ (enhance with new components)
-│   │   │   ├── chat/
-│   │   │   ├── widgets/
-│   │   │   ├── lobby/
-│   │   │   └── progress/
-│   │   ├── pages/ (add new pages)
-│   │   │   ├── lobby.tsx
-│   │   │   └── room/[id].tsx
-│   │   └── styles/ (add terminal theme)
-│   │       └── terminal.css
-├── server/ (existing Fastify app)
-│   ├── package.json (update with new dependencies)
-│   ├── src/
-│   │   ├── routes/ (enhance with new routes)
-│   │   ├── services/ (add new services)
-│   │   ├── socket/ (add Socket.IO handlers)
-│   │   └── database/ (add Prisma models)
-│   └── prisma/
-│       ├── schema.prisma
-│       └── migrations/
-└── shared/ (existing shared types)
-    ├── types.ts (enhance with new types)
-    └── constants.ts
-```
+## APIs (REST Minimal)
+- `POST /api/session/start {duration}` → Creates session + timer
+- `POST /api/session/agenda {goal}` → Sets/updates agenda
+- `POST /api/widget {type, state}` → Creates widget
+- `GET /api/session/:id/summary` → Retrieves AI summary
 
-## 4. Critical Architectural Decisions
+**Socket Events:** `session:start|tick|end`, `widget:create|update|delete`, `ai:drift|summary|next`, `enforce:soft|hard|capacity`
 
-### Decision 1: Real-time Event Architecture
-**Problem:** State synchronization vs individual widget responses
+## Webhooks
+Z3roCom supports webhooks to allow external systems to be notified of important events. Webhooks can be configured per session or globally.
 
-**Solution - Hybrid Event Model:**
-```
-Real-time Events (Socket.IO):
-├── Room state (lobby, occupancy, status)
-├── Agenda state (current agenda, progress updates)
-├── Progress synchronization (individual contributions to team progress)
-└── Lobby updates (room availability, participant counts)
+**Webhook Events:**
 
-Non-real-time Events (HTTP):
-├── Widget deployment (individual → chat message)
-├── User authentication and room access
-├── GitHub integration queries
-└── Persistent data operations
-```
+- `session:started`: Fired when a new session begins.
+- `session:ended`: Fired when a session ends.
+- `agenda:set`: Fired when a session agenda is set or updated.
+- `widget:updated`: Fired when any widget state changes.
+- `summary:generated`: Fired when an AI-generated session summary is available.
 
-**Rationale:** Separates collaborative state (needs real-time) from individual actions (HTTP sufficient)
+**Webhook Payload:**
 
-### Decision 2: Agenda Conflict Resolution Strategy
-**Problem:** Multiple users editing agenda simultaneously
+Each webhook event includes a standard payload structure:
 
-**Solution - Optimistic Locking with Conflict Detection:**
-```
-Agenda Edit Flow:
-1. User opens agenda editor → Gets current version + timestamp
-2. User makes changes locally (not broadcast immediately)
-3. User attempts save → Server checks if agenda changed since edit start
-4. If conflict detected → Show diff, allow merge or overwrite choice
-5. If no conflict → Save and broadcast to all room participants
-```
-
-**Rationale:** Prevents agenda corruption while maintaining responsive UX
-
-### Decision 3: Database Strategy for Brownfield
-**Problem:** Existing scaffold needs persistent storage for new features
-
-**Solution - Progressive Database Integration:**
-```
-Phase 1 (MVP): 
-├── SQLite/PostgreSQL for local development
-├── Room state, agenda persistence, user sessions
-└── Simple schema focused on core features
-
-Phase 2 (Growth):
-├── Redis for real-time state caching
-├── WebSocket session management
-└── Enhanced performance for concurrent users
-```
-
-**Rationale:** Start simple, scale progressively without over-engineering
-
-## 5. System Architecture Design
-
-### Frontend Architecture (Next.js Enhancement)
-
-**Component Structure:**
-```
-client/src/
-├── components/
-│   ├── chat/
-│   │   ├── ChatInterface.tsx (main chat container)
-│   │   ├── MessageList.tsx (chat message display)
-│   │   └── MessageInput.tsx (input with widget triggers)
-│   ├── widgets/
-│   │   ├── WidgetToolbar.tsx (horizontal icon bar)
-│   │   ├── WidgetContainer.tsx (modal form overlay)
-│   │   ├── widgets/
-│   │   │   ├── MusicWidget.tsx
-│   │   │   ├── ProjectWidget.tsx
-│   │   │   ├── PollWidget.tsx
-│   │   │   └── AgendaWidget.tsx
-│   ├── lobby/
-│   │   ├── RoomLobby.tsx (gaming-style room browser)
-│   │   ├── RoomCard.tsx (individual room display)
-│   │   └── RoomCreator.tsx (room creation modal)
-│   ├── progress/
-│   │   ├── ProgressBar.tsx (bottom progress indicator)
-│   │   ├── MetadataPanel.tsx (agenda details overlay)
-│   │   └── ProgressSync.tsx (real-time progress updates)
-│   └── guides/
-│       └── StickmanGuide.tsx (contextual onboarding)
-```
-
-**State Management Strategy:**
-```
-Real-time State (Socket.IO + React Context):
-├── Room lobby status
-├── Agenda progress synchronization  
-├── Participant presence
-└── Live room occupancy
-
-Local State (React useState/useReducer):
-├── Widget container forms
-├── UI interactions (modal open/close)
-├── Input validation
-└── Theme preferences
-
-Persistent State (HTTP + React Query):
-├── User authentication
-├── Room configurations
-├── Agenda history
-└── User preferences
-```
-
-### Backend Architecture (Fastify Enhancement)
-
-**Service Layer Structure:**
-```
-server/src/
-├── routes/
-│   ├── auth/ (user authentication)
-│   ├── rooms/ (room CRUD operations)
-│   ├── widgets/ (widget deployment endpoints)
-│   └── integrations/ (GitHub, music services)
-├── services/
-│   ├── RoomService.ts (room management logic)
-│   ├── AgendaService.ts (agenda conflict resolution)
-│   ├── WidgetService.ts (widget processing)
-│   └── ProgressService.ts (progress tracking)
-├── socket/
-│   ├── SocketManager.ts (Socket.IO event handling)
-│   ├── RoomEvents.ts (room state broadcasting)
-│   ├── AgendaEvents.ts (agenda synchronization)
-│   └── ProgressEvents.ts (progress updates)
-└── database/
-    ├── models/ (data models)
-    ├── migrations/ (schema evolution)
-    └── repositories/ (data access layer)
-```
-
-## 6. Data Architecture
-
-### Database Schema Design
-```sql
--- Core Tables
-Users (id, username, email, preferences, created_at)
-Rooms (id, name, type, status, created_by, scheduled_time, duration_limit)
-RoomParticipants (room_id, user_id, role, joined_at)
-
--- Agenda Management (Conflict Resolution)
-Agendas (id, room_id, title, description, created_by, version, created_at)
-AgendaProgress (id, agenda_id, user_id, progress_percent, updated_at)
-
--- Widget System
-WidgetDeployments (id, room_id, user_id, widget_type, widget_data, created_at)
-
--- Real-time State Cache (Redis if needed)
-RoomState (room_id, participant_count, current_agenda_id, lobby_status)
-```
-
-### Real-time Event Schema
-```javascript
-// Socket.IO Event Definitions
-Room Events:
-├── 'room:join' → {roomId, userId, userInfo}
-├── 'room:leave' → {roomId, userId}
-├── 'room:status_update' → {roomId, status, participantCount}
-
-Agenda Events:
-├── 'agenda:created' → {roomId, agenda, createdBy}
-├── 'agenda:progress_update' → {roomId, agendaId, userId, progress}
-├── 'agenda:conflict_detected' → {roomId, conflictDetails, resolutionOptions}
-
-Lobby Events:
-├── 'lobby:room_list_update' → {rooms: [roomData]}
-├── 'lobby:room_created' → {newRoom}
-├── 'lobby:room_status_changed' → {roomId, newStatus}
-```
-
-## 7. Implementation Patterns & Standards
-
-### API Response Formats
-```typescript
-// Success Response Pattern
-interface APIResponse<T> {
-  success: true;
-  data: T;
-  timestamp: string;
-}
-
-// Error Response Pattern  
-interface APIError {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    details?: any;
-  };
-  timestamp: string;
-}
-
-// Widget Deployment Response
-interface WidgetDeploymentResponse {
-  success: true;
-  data: {
-    widgetId: string;
-    roomId: string;
-    messageId: string;
-    widgetType: 'music' | 'project' | 'poll' | 'agenda';
-    deployedAt: string;
-  };
-}
-```
-
-### Communication Patterns
-```typescript
-// HTTP API Route Patterns
-// GET    /api/rooms              - List available rooms
-// POST   /api/rooms              - Create new room
-// GET    /api/rooms/:id          - Get room details
-// PUT    /api/rooms/:id/agenda   - Update room agenda
-// POST   /api/widgets/deploy     - Deploy widget to chat
-// GET    /api/integrations/github - GitHub integration status
-
-// Socket.IO Event Patterns
-// Client → Server: 'room:join', 'agenda:update', 'widget:trigger'
-// Server → Client: 'room:status_changed', 'agenda:progress_update', 'lobby:refresh'
-// Broadcast: 'message:new', 'participant:joined', 'progress:updated'
-```
-
-### Lifecycle Patterns
-```typescript
-// Component Loading States
-enum LoadingState {
-  IDLE = 'idle',
-  LOADING = 'loading', 
-  SUCCESS = 'success',
-  ERROR = 'error'
-}
-
-// Error Recovery Pattern
-interface ErrorBoundary {
-  retry: () => void;
-  fallback: ReactNode;
-  onError: (error: Error) => void;
-}
-
-// Widget Lifecycle
-enum WidgetState {
-  CONFIGURING = 'configuring',    // User filling form
-  VALIDATING = 'validating',      // Input validation
-  DEPLOYING = 'deploying',        // Sending to chat
-  DEPLOYED = 'deployed',          // Successfully in chat
-  FAILED = 'failed'               // Deployment failed
-}
-```
-
-### Location & Organization Patterns
-```typescript
-// URL Structure Pattern
-/lobby                           - Main room browser
-/room/:roomId                    - Individual room chat
-/room/:roomId/agenda             - Room agenda management
-/room/:roomId/settings           - Room configuration
-/auth/github                     - GitHub OAuth callback
-/api/v1/rooms                    - API versioning pattern
-
-// File Naming Conventions
-ComponentName.tsx                - React components (PascalCase)
-ComponentName.test.tsx           - Component tests
-ComponentName.stories.tsx        - Storybook stories  
-serviceName.service.ts           - Backend services (camelCase)
-serviceName.test.ts              - Service tests
-route-name.route.ts              - API routes (kebab-case)
-
-// Asset Organization  
-public/
-├── icons/widgets/               - Widget icon assets
-├── sounds/terminal/             - Terminal UI sounds  
-├── fonts/monospace/             - Terminal fonts
-└── images/stickman/             - Guide character assets
-```
-
-### Error Handling Patterns
-```typescript
-// Frontend Error Handling
-interface ErrorHandler {
-  // Network errors (offline, timeout)
-  handleNetworkError: (error: NetworkError) => void;
-  
-  // Validation errors (user input)
-  handleValidationError: (errors: ValidationError[]) => void;
-  
-  // Widget deployment failures  
-  handleWidgetError: (error: WidgetError) => void;
-  
-  // Socket disconnection recovery
-  handleSocketError: (error: SocketError) => void;
-}
-
-// Backend Error Categories
-enum ErrorCode {
-  ROOM_NOT_FOUND = 'ROOM_NOT_FOUND',
-  AGENDA_CONFLICT = 'AGENDA_CONFLICT', 
-  WIDGET_VALIDATION = 'WIDGET_VALIDATION',
-  AUTH_REQUIRED = 'AUTH_REQUIRED',
-  RATE_LIMITED = 'RATE_LIMITED'
-}
-```
-
-### Data Formatting Standards
-```typescript
-// Date Handling (consistent across app)
-const formatTimestamp = (date: Date): string => 
-  date.toISOString(); // Always store as ISO strings
-
-const formatDisplayTime = (date: Date): string =>
-  Intl.DateTimeFormat('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  }).format(date); // Display format for terminal UI
-
-// Terminal Styling Constants  
-export const TerminalTheme = {
-  colors: {
-    primary: '#00ff41',      // Neon green
-    background: '#000000',   // Pure black
-    accent: '#ff0040',       // Neon red for errors
-    warning: '#ffff00',      // Neon yellow
-    text: '#00ff41'          // Green text
-  },
-  fonts: {
-    mono: 'JetBrains Mono, Fira Code, Monaco, monospace'
+```json
+{
+  "event": "session:started",
+  "timestamp": "2025-12-22T17:12:45.016Z",
+  "session_id": "sess_12345",
+  "data": {
+    // Event-specific data
   }
-} as const;
+}
 ```
 
-## 8. Integration Architecture
+**Configuring Webhooks:**
 
-### GitHub Integration Strategy
-```
-Authentication Flow:
-├── OAuth2 GitHub app registration
-├── Repository access permissions (read-only for privacy)
-├── Webhook integration for real-time project updates
-└── API endpoints for project data fetching
+To configure a webhook, you can use the following API endpoint:
 
-Project Widget Integration:
-├── /project command → GitHub repo selection
-├── Issue/PR status display in chat
-├── Commit activity timeline
-└── Branch protection and deployment status
-```
+- `POST /api/webhooks` → Registers a new webhook URL
 
-### Music Service Integration
-```
-Supported Services:
-├── Spotify Web API (primary)
-├── YouTube Music API (secondary)
-├── Apple Music (future consideration)
+## UI Integration
 
-Widget Functionality:
-├── /music command → service selection
-├── Collaborative playlist creation
-├── Current playing status broadcast
-├── Queue management (voting system)
-```
+The Z3roCom UI is a single-page application (SPA) built with Next.js. It communicates with the backend via a combination of REST APIs and Socket.IO for real-time updates.
 
-## 9. Security Architecture
+**Socket.IO Integration:**
 
-### Authentication & Authorization
-```
-Security Layers:
-├── JWT token-based authentication
-├── Rate limiting for API endpoints
-├── Socket.IO connection authentication
-├── Room-level permissions (creator, participant, observer)
+Socket.IO is used for real-time communication between the frontend and backend. The frontend establishes a Socket.IO connection to the backend server when a session starts. The connection is scoped to the specific session ID, ensuring that users only receive updates relevant to their active session.
 
-Privacy Controls:
-├── Private rooms (invite-only)
-├── GitHub integration requires explicit consent
-├── Widget data isolation per room
-└── User data encryption at rest
-```
+**REST API Integration:**
 
-### Input Validation & Sanitization
-```
-Frontend Validation:
-├── Widget input schema validation
-├── Command syntax checking
-├── File upload restrictions
-└── XSS prevention in chat messages
+For non-real-time operations, such as fetching historical data or creating new sessions, the frontend uses REST APIs. These APIs are built using the Fastify framework.
 
-Backend Validation:
-├── API request validation (Joi/Zod schemas)
-├── Socket.IO event validation
-├── Database input sanitization
-└── Rate limiting per user/room
-```
+**State Management:**
 
-## 10. Performance Architecture
+The frontend uses React's `useReducer` hook for state management. The `SessionProvider` component acts as the context provider, centralizing the state and Socket.IO event handling. Widgets manage their own local state but emit events to the backend for persistence and synchronization.
 
-### Scalability Considerations
-```
-Horizontal Scaling:
-├── Stateless API design
-├── Redis for session management
-├── Database connection pooling
-├── Socket.IO clustering with Redis adapter
+## Implementation Phases (14-Day MVP Plan)
+**Week 1 (Days 1-7): Core Chat Application**
+- Goal: A functional, real-time chat application.
+- Deliverables: Backend foundation (Fastify, Socket.IO), Prisma schemas (`User`, `Session`, `Message`), and a working Next.js frontend for authentication and messaging.
 
-Caching Strategy:
-├── Room lobby data (5 minute TTL)
-├── User preferences (session-based)
-├── Widget templates (long-term cache)
-└── GitHub API responses (15 minute TTL)
-```
+**Week 2 (Days 8-14): Foundational Z3roCom Features**
+- Goal: Layer core session control features onto the chat application.
+- Deliverables: Header bar for Agenda/Timer, `/timer` and `/agenda` commands, the Widget Zone layout, and the first widget (`/tasks`).
 
-### Resource Optimization
-```
-Frontend Optimization:
-├── Component lazy loading
-├── Widget modal code splitting
-├── Terminal rendering optimization
-├── Socket.IO message batching
+**Post-MVP:** Subsequent sprints will focus on implementing the full widget suite, advanced enforcement rules, and the AI facilitator features as originally planned.
 
-Backend Optimization:
-├── Database query optimization
-├── Agenda conflict detection algorithms
-├── Widget processing queue
-└── Real-time event throttling
-```
-
-## 11. Deployment Architecture
-
-### Infrastructure Strategy
-```
-Development:
-├── Local SQLite database
-├── Hot reloading (Next.js + Fastify)
-├── Mock GitHub/music integrations
-└── Terminal-based development tools
-
-Production:
-├── PostgreSQL primary database
-├── Redis for caching and sessions
-├── PM2 for process management
-├── Environment-based configuration
-```
-
-### Monitoring & Observability
-```
-Application Monitoring:
-├── Real-time Socket.IO connection metrics
-├── Room creation/join analytics
-├── Widget usage patterns
-├── Performance bottleneck identification
-
-Error Handling:
-├── Graceful Socket.IO disconnection recovery
-├── Widget deployment failure rollback
-├── Agenda conflict resolution logging
-└── GitHub API failure fallbacks
-```
-
-## 12. Migration & Brownfield Integration
-
-### Existing Codebase Enhancement
-```
-Next.js Integration:
-├── Add new pages: /lobby, /room/[id]
-├── Enhance existing components with terminal styling
-├── Add Socket.IO client configuration
-├── Implement widget system routing
-
-Fastify Integration:
-├── Add Socket.IO middleware
-├── Implement new API routes
-├── Add database models and migrations
-├── Configure real-time event handlers
-```
-
-### Progressive Feature Rollout
-```
-Phase 1 (Core Chat):
-├── Basic room creation and joining
-├── Terminal-styled chat interface
-├── Simple widget system (music, project)
-├── GitHub integration MVP
-
-Phase 2 (Advanced Features):
-├── Agenda management with conflict resolution
-├── Gaming lobby enhancements
-├── Advanced widget system
-├── Real-time collaboration features
-
-Phase 3 (Scale & Polish):
-├── Performance optimizations
-├── Advanced analytics
-├── Mobile responsiveness
-├── Plugin system for custom widgets
-```
-
-## 13. Decision Summary Table
-
-| Category | Decision | Version/Choice | Rationale |
-|----------|----------|----------------|-----------|
-| **Frontend Framework** | Next.js | 16.0.1 | Existing brownfield foundation, React SSR |
-| **Frontend Language** | TypeScript | 5.x | Type safety, developer productivity |
-| **UI Framework** | TailwindCSS | 3.x | Terminal styling, rapid development |
-| **Backend Framework** | Fastify | 5.6.2 | Existing foundation, high performance |
-| **Real-time** | Socket.IO | 4.8.1 | Existing foundation, reliable WebSocket fallback |
-| **Database (Prod)** | PostgreSQL | 18.x | ACID compliance, JSON support, mature |
-| **Database (Dev)** | SQLite | 3.x | Zero-config development environment |
-| **Caching** | Redis | 7.x | Session management, real-time state |
-| **ORM** | Prisma | 5.x | Type-safe database access, migrations |
-| **Authentication** | JWT + OAuth2 | - | Stateless auth, GitHub integration |
-| **Testing** | Jest + Playwright | 29.x + 1.x | Unit tests + E2E coverage |
-| **Node.js** | Node.js LTS | 20.x | Long-term support, ecosystem compatibility |
-| **Event Model** | Hybrid (Socket.IO + HTTP) | - | Real-time for state sync, HTTP for individual actions |
-| **Conflict Resolution** | Optimistic Locking | - | Prevents agenda corruption, responsive UX |
-| **State Management** | React Context + React Query | - | Real-time state + persistent data |
-| **File Organization** | Feature-based + Shared | - | Scalable component organization |
-| **API Pattern** | RESTful + Socket.IO events | - | Standard HTTP + real-time capabilities |
-| **Error Handling** | Typed error responses | - | Consistent error management |
-| **Deployment** | Progressive enhancement | - | Brownfield integration approach |
-
----
-
-**Architecture Validation Checklist:**
-- [x] Addresses all PRD requirements
-- [x] Supports UX design specifications  
-- [x] Handles real-time collaboration effectively
-- [x] Provides scalable brownfield integration
-- [x] Includes comprehensive security measures
-- [x] Enables progressive feature development
-- [x] Maintains terminal aesthetic integrity
-- [x] Supports target user workflows (developers + students)
-- [x] All technology versions specified and verified (2025-11-11)
-- [x] Complete implementation patterns documented  
-- [x] Project initialization instructions provided
-- [x] Decision summary table with all required information
+## References
+- **Detailed Widget Specs:** [Widget-Specifications.md](Widget-Specifications.md) (all 10 widgets with state schemas, UI behaviors, AI integration)
+- **Product Requirements:** [PRD.md](PRD.md)
+- **Technical Spec:** [Tech-Spec.md](Tech-Spec.md)
+- **UX Design:** [UX-Design.md](UX-Design.md)
+- **Epic Breakdown:** [Epic-Story-Breakdown.md](Epic-Story-Breakdown.md)

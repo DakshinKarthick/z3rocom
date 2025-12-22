@@ -1,211 +1,183 @@
 # Z3roCom UX Design Specification
 
-**Project:** Z3roCom - Developer-focused Chat Application  
-**Date:** 2025-11-10  
-**UX Designer:** Sally  
 **Version:** 1.0
-
-## 1. Project Understanding Confirmed
-
-### Core Experience Definition
-**Primary Activity:** Chat-focused collaboration with occasional widget enhancement  
-**Critical Success Factor:** Setting and maintaining agenda focus to keep teams on track  
-**Key Interaction:** Visual widget menu appears when users type `/` for manual selection  
-**User Balance:** Accessible to both developers and college students through visual interfaces
-
-### Target Users Validated
-- **Primary:** Developers (hackathon teams, work sprints, open source collaboration)
-- **Secondary:** College students (study groups, coding bootcamps, group assignments)
-- **Shared Need:** Productive project planning and collaboration without productivity loss
-
-### Platform Context
-- **Web Application:** Next.js + Fastify + Socket.IO
-- **Brownfield Approach:** Building on existing scaffold
-- **Aesthetic:** Terminal/hacker theme with neon colors and monospace fonts
-- **Personality:** Stickman guide for friendly assistance
-
-## 2. Core Experience Priorities
-
-### Most Important User Actions (In Order)
-1. **Agenda Setting & Maintenance** - Keeps teams focused and productive
-2. **Visual Widget Selection** - `/` triggers accessible menu for all skill levels  
-3. **Seamless Chat Flow** - Natural conversation with productivity enhancements
-4. **Stickman Guidance** - Contextual help without being intrusive
-
-### Design Success Criteria
-- **Agenda focus** prevents conversation drift
-- **Widget deployment** feels effortless, not technical
-- **Terminal aesthetic** appeals to developers but doesn't intimidate students
-- **Interface balance** between personality (fun) and productivity (focus)
-
-## 3. Visual Design Language
-
-### Aesthetic Direction
-**Overall Vibe:** Playful gaming interface with sci-fi exclusivity - "unreal" feeling that makes users feel special
-**Color Foundation:** Classic green terminal on black for authentic hacker aesthetic
-**Personality Balance:** Underground exclusive feel while remaining welcoming to students
-
-### Character Design
-**Stickman Guide:**
-- **Style:** Simple pixel art (8-bit style) for retro gaming charm
-- **Behavior:** Appears/disappears contextually (not always visible)
-- **Animation:** Static poses, no animated behaviors (clean and minimal)
-- **Purpose:** Contextual assistance without visual distraction
-
-### Widget Menu Systems
-**Multiple Interaction Options** (user preference or context-dependent):
-1. **Terminal Autocomplete Dropdown** - VS Code IntelliSense style for developers
-2. **Command Palette Overlay** - Figma-style quick actions for power users  
-3. **Gaming Radial Menu** - Cursor-centered radial selection for immersive feel
-
-### Color Palette Foundation
-**Primary:** Classic green (#00FF00) on pure black (#000000)
-**Accent Colors:** Needed for different interface states and widget categories
-**Accessibility:** Ensure contrast ratios work for extended use
-
-## 4. Core Interface Design
-
-### Main Chat Layout
-**Agenda System:**
-- **Setting:** Users can set agenda but it's stored in metadata (not always visible)
-- **Visual Indicator:** Only progress toggle visible in main interface
-- **Access:** Users navigate to metadata view to see full agenda details
-- **Focus:** Progress indicator keeps teams aware without cluttering interface
-
-### Room Booking System
-**Lobby Picking Concept:**
-- **Game-style lobby interface** for room selection and creation
-- **Time-based system:** Scheduled time slots + instant room creation
-- **Purpose-driven templates:** Pre-configured room types (Study Session, Sprint Planning, Hackathon, Code Review)
-- **Visual Style:** Gaming lobby aesthetic with available/occupied room status
-
-### Stickman Guide Assistance
-**Template Suggestions:** Contextual help with room/agenda templates
-- **Room Creation:** "Hey! Looks like you're planning a hackathon - want the Hackathon template?"
-- **Agenda Setting:** "Need help structuring your sprint planning agenda?"
-- **Widget Recommendations:** "This conversation seems like debugging - want error tracking widgets?"
-- **New User Onboarding:** Guide through first room creation and widget usage
-
-### Widget Menu Interaction
-**Hybrid Visual + Command System:**
-- **Primary:** Visual icons for widgets (🎵 music, 📋 project, 📊 poll, etc.)
-- **Secondary:** Same widgets accessible via commands (`/music`, `/project`)
-- **Discovery:** New users see visual icons, power users learn commands naturally
-- **Stickman Role:** Helps locate widgets during onboarding only (not permanent feature)
-
-## 5. Detailed User Flows
-
-### Agenda Management Flow
-**Setup:** Manual agenda creation by users (not automatic)
-**Interface Elements:**
-- **Bottom Progress Bar:** Persistent, minimalist progress indicator
-- **Metadata Panel:** Accessible overlay for full agenda details and editing
-- **Gentle Nudges:** Subtle progress reminders without overwhelming chat flow
-
-### Room Creation & Access
-**Quick Rooms:**
-- **Instant Creation:** Immediate access for spontaneous collaboration
-- **Limited Duration:** Time-boxed sessions with clear end times
-- **Template Options:** Available but not required for quick rooms
-
-**Scheduled Rooms:**
-- **Waiting Time System:** Users can book future time slots
-- **Template Integration:** Purpose-driven room setups with agenda templates
-- **Gaming Lobby Feel:** Visual server browser showing available/scheduled rooms
-
-### Widget Discovery & Usage
-**Visual Menu System:**
-- **Icon-Based Interface:** Clear visual representation of each widget type
-- **Categories:** Organized by function (Communication, Project Tools, Planning, etc.)
-- **Quick Access:** Icons remain visible/accessible without remembering commands
-- **Command Backup:** Power users can type commands for faster deployment
-
-### Onboarding Experience
-**Stickman Guide Role:**
-- **Widget Location:** "The music widget is here!" with pointer to icon
-- **Template Suggestions:** "Try the Hackathon room template for your project"
-- **One-time Help:** Appears during first few sessions, then contextual only
-- **Progressive Disclosure:** Introduces features gradually, not all at once
-
-## 6. Final Interface Specifications
-
-### Widget Interface Design
-**Horizontal Icon Bar:**
-- **Location:** Persistent toolbar above chat input field
-- **Icons:** 🎵 Music, 📋 Project, 📊 Poll, ⏰ Agenda, 🎯 Focus, 💡 Ideas
-- **Access Methods:** Click icon OR type `/music` - both trigger same raw widget container
-- **Visual Style:** Green neon icons on dark background with subtle glow on hover
-
-**Raw Widget Container System:**
-- **Activation:** Clicking icon or typing command opens editable widget form
-- **Interface:** Modal overlay with form fields specific to widget type
-- **Example:** `/music` opens container with fields for track, artist, platform, status
-- **Deployment:** After filling data, widget becomes chat message with rich preview
-- **Editing:** Users can edit widget data before sending, or edit existing widgets
-
-### Bottom Progress Bar Details
-**Visual Design:** Classic terminal loading bar with green ASCII blocks (████░░░░) 
-**Interaction:** Click to open metadata panel overlay
-**Display:** Shows percentage + brief agenda phase ("Sprint Planning - 60%")
-**Behavior:** Pulses gently when agenda milestones are reached
-
-### Metadata Panel Design
-**Access:** Click progress bar or keyboard shortcut (Ctrl+M)
-**Style:** Slide-out overlay from bottom, terminal-themed with green text
-**Content Organization:**
-- **Agenda Details:** Full agenda text, objectives, milestones
-- **Progress Tracking:** Individual task completion, team member contributions  
-- **Timeline View:** Time spent on each agenda item, estimated completion
-
-### Room Lobby Interface
-**Quick Rooms Section:**
-- **Visual:** Green "⚡ INSTANT" badges, countdown timers for duration limits
-- **Access:** One-click join, 2-hour default time limit
-- **Templates:** Simplified 3-option quick select (Focus, Brainstorm, Debug)
-
-**Scheduled Rooms Section:**
-- **Visual:** Blue "📅 SCHEDULED" badges, calendar icons showing start times
-- **Creation:** Full template library available, calendar picker for booking
-- **Status Indicators:** Available (green), Full (red), Starting Soon (blinking yellow)
-
-### Color Palette Expansion
-**Primary:** Classic green (#00FF00) on pure black (#000000)
-**Secondary Accents:**
-- **Blue (#00BBFF):** Scheduled rooms, info states, metadata
-- **Yellow (#FFFF00):** Warnings, notifications, time alerts  
-- **Red (#FF3333):** Errors, full rooms, urgent items
-- **Cyan (#00FFFF):** Active states, focus modes, progress completion
-
-### Typography System
-**Primary Font:** 'Fira Code' or 'JetBrains Mono' (monospace with programming ligatures)
-**Fallback:** 'Courier New', monospace
-**Sizes:** 
-- **Chat Text:** 14px
-- **Widget Headers:** 16px bold
-- **Progress Text:** 12px
-- **Metadata Panel:** 13px
-
-## 7. Responsive & Accessibility
-**Mobile Adaptation:** 
-- **Horizontal icons** stack vertically on mobile
-- **Widget containers** become full-screen modals
-- **Progress bar** moves to top for thumb accessibility
-
-**Accessibility Standards:**
-- **Color contrast** meets WCAG AA standards (green on black = 15.3:1 ratio)
-- **Keyboard navigation** for all widget interactions
-- **Screen reader** support for stickman guidance and progress updates
-- **Focus indicators** with enhanced green glow for keyboard users
-
-## 8. Implementation Notes
-**Technical Considerations:**
-- **Widget State Management:** Each widget container maintains local state until deployed
-- **Real-time Sync:** Progress updates broadcast to all room participants via Socket.IO
-- **Performance:** Icon bar renders as SVG sprites for fast loading
-- **Browser Support:** Progressive enhancement for older browsers (fallback to text commands)
+**Date:** 2025-12-22
+**Status:** Locked
 
 ---
 
-**Design Status:** Complete - Ready for Architecture Phase  
-**Next Phase:** Technical architecture for widget system and real-time functionality  
-**Dependencies:** None - all design decisions finalized
+## 1. Core Emotional Target
+
+The primary emotion Z3roCom must deliver is **Empowered Control**.
+
+This is not calm, zen, or mere efficiency. It is the feeling a user gets when they know, "Nothing can hijack this session unless I allow it." It is command-center control, not micromanagement.
+
+The sentence users should feel, not say, is: **“I don’t have to keep everything in my head — the system is holding it.”**
+
+### 1.1. Emotional Mix
+
+- **Primary:** Empowered Control
+- **Secondary (in order):**
+    1.  **Momentum:** "We’re moving forward."
+    2.  **Clarity:** "I know what matters."
+    3.  **Relief:** "Nothing is getting lost."
+    4.  **Confidence:** "This session will end well."
+
+### 1.2. Design Philosophy
+
+> "Every pixel reinforces control. Dark backgrounds recede. Blue borders command. Mono fonts measure. Widgets persist. Chat flows away. Nothing bounces. Everything obeys."
+
+If a user doesn’t subconsciously feel, “This behaves like my editor, not a chat app,” the design has drifted.
+
+---
+
+## 2. Inspiration & UX Patterns
+
+Our UX is a synthesis of three trusted applications:
+
+| App        | Core Feeling | Pattern to Steal                               | Z3roCom Implementation                               |
+| :--------- | :----------- | :--------------------------------------------- | :--------------------------------------------------- |
+| **VS Code**  | **Control**    | Command Palette authority, persistent panels   | `/` commands, non-disposable Widget Zone, disposable Chat |
+| **Linear**   | **Momentum**   | Opinionated flows, no clutter, clear states    | Task Slice Board, immutable Decision Log, auto-ending sessions |
+| **Obsidian** | **Safety**     | Local-first feel, explicit structure, permanence | Immutable Outcome Summary, session archives, no data loss |
+
+**North Star:** Z3roCom should feel like **VS Code running a Linear-style work session that ends with an Obsidian-grade artifact.**
+
+---
+
+## 3. Design System & Technical Foundation
+
+- **Framework:** Next.js, React, TypeScript
+- **UI Library:** **shadcn/ui**
+- **Rationale:** Matches the developer-centric, "own your code" philosophy of VS Code. Radix primitives provide accessible, unstyled building blocks, and Tailwind CSS allows for the rapid, precise styling required to implement the specified design language.
+
+---
+
+## 4. Visual Design Language
+
+### 4.1. Color System
+
+**Primary Palette (Authority + Control)**
+
+- **Background Hierarchy:**
+    - App Shell: `#0D0D0D` (Deep black, VS Code)
+    - Widget Zone: `#1A1A1A` (Elevated)
+    - Chat Stream: `#0D0D0D` (Recessed, disposable)
+    - Active Widget: `#262626` (Command focus)
+- **Control States:**
+    - Primary Action: `#3B82F6` (Authority blue)
+    - Danger/Lock: `#EF4444` (Hard stop red)
+    - Success/Done: `#10B981` (Momentum green)
+    - Warning/Soft Lock: `#F59E0B` (Pre-lock amber)
+- **Text Hierarchy:**
+    - Primary: `#FFFFFF` (Commands, agenda, widget content)
+    - Secondary: `#A1A1AA` (Metadata, timestamps)
+    - Tertiary: `#52525B` (Disposable chat text)
+
+### 4.2. Typography
+
+- **Font Stack:**
+    - **UI:** `Inter` (Clean, neutral, Linear-like)
+    - **Code/Data:** `JetBrains Mono` (For timers, code widgets, data points)
+- **Scale & Weight (Reinforces Permanence):**
+    - **Agenda (Header):** 16px `semibold` (Immutable)
+    - **Timer (Header):** 24px `JetBrains Mono` (Constant)
+    - **Widget Headers:** 14px `semibold` (Persistent)
+    - **Chat Messages:** 14px `regular` (Transient)
+    - **Metadata:** 12px `regular` (Contextual)
+
+### 4.3. Spacing & Density (4px Grid)
+
+- **Header (Agenda/Timer/Distraction):** 48px height, fixed, never collapses.
+- **Widget Zone:**
+    - 8px vertical gap between widgets.
+    - 12px internal padding.
+    - Collapsed Height: 40px.
+- **Chat Stream:**
+    - 4px vertical gap between messages (dense, disposable).
+    - Max width: 680px.
+- **Message Input:** 56px height, fixed, always visible.
+
+### 4.4. Motion Principles
+
+**Core Rule:** Motion reinforces control and obedience. No playful physics.
+
+- **Widget Expand/Collapse:** 200ms `ease-out` on height and opacity. No layout shift.
+- **Timer Updates:** Instant. No animation.
+- **Chat Auto-Scroll:** Smooth (400ms). User scroll instantly interrupts.
+- **Loading States:** Skeleton screens, not spinners.
+- **Anti-Patterns:** ❌ Bounce effects, ❌ fade-ins on every action, ❌ confetti.
+
+---
+
+## 5. User Journey Flows
+
+### 5.1. Flow 1: Starting a Session
+
+1.  **Create:** User clicks "New Session", enters a one-line agenda, and selects a preset timer (25/45/90 min).
+2.  **Initialize:** The UI appears with the Agenda and Timer locked in the header. The Widget Zone is empty, and the Chat shows a "Session Started" message.
+3.  **First Action:** User types `/tasks`, the Task Board widget materializes in the Widget Zone, and focus shifts to it.
+
+### 5.2. Flow 2: Deploying Widgets
+
+1.  **Trigger:** User types `/` in the message input.
+2.  **Command:** A dropdown of available widgets appears. Arrow keys navigate, Enter deploys.
+3.  **Materialize:** The widget appears in the zone, first collapsed (40px height), then auto-expands. A confirmation appears in the disposable chat.
+4.  **Stacking:** New widgets stack vertically at the bottom of the Widget Zone. Multiple widgets can be expanded simultaneously.
+
+### 5.3. Flow 3: Handling Locks
+
+-   **Soft Lock (6 messages AND 3 minutes):**
+    - **Effect:** Disables deployment of "deep work" widgets (`/code`, `/progress`).
+    - **UI:** Distraction meter turns amber (`#F59E0B`), input border glows amber, chat shows a warning.
+    - **Unlock:** Mark a task complete or update the agenda. The system provides positive feedback.
+-   **Hard Lock (10 messages OR 6 minutes):**
+    - **Effect:** Disables all chat input. Widget interaction remains possible.
+    - **UI:** Input is disabled with a red border (`#EF4444`), a lock icon appears by the timer, and the distraction meter pulses red.
+    - **Unlock:** Complete all agenda items or end the session.
+
+### 5.4. Flow 4: Ending with Outcome Summary
+
+1.  **Trigger:** Timer hits 00:00, user clicks "End Session", or `/end` is typed.
+2.  **Generation:** The system freezes the UI and uses AI to analyze all session data (tasks, decisions, blockers, chat context).
+3.  **Display:** All other widgets collapse. A new **Summary Widget** expands, showing:
+    - **Completed Items**
+    - **Incomplete Items**
+    - **Decisions Made**
+    - **Blockers Raised**
+    - **AI Recommendations** for the next session.
+4.  **Actions:** The summary provides three actions:
+    - **[Copy to Clipboard]:** Exports a clean Markdown summary.
+    - **[Start Next Session]:** Pre-fills a new session with AI recommendations.
+    - **[Close]:** Archives the session and returns to the dashboard.
+
+---
+
+## 6. Component-Specific Design
+
+### 6.1. Layout Components
+
+- **Header:** 48px tall, fixed. Contains Agenda (left), Timer (center), and Distraction Meter (right, as a thin progress bar).
+- **Widget Zone:** A persistent, scrollable column where widgets live.
+- **Chat Stream:** A disposable, secondary column for transient conversation.
+- **Message Input:** 56px tall, fixed. The command center for the application.
+
+### 6.2. Widget States
+
+- **Collapsed (Default):** 40px height, shows icon, title, and a status badge. Hovering shows a blue accent border.
+- **Expanded (Active):** Background is elevated (`#262626`), and a blue "active ring" appears. Full widget content is visible.
+
+### 6.3. Accessibility
+
+- **Keyboard Navigation:** A logical tab order is enforced (Header -> Widgets -> Chat -> Input). `/` focuses the input, `Esc` collapses all widgets.
+- **Focus Indicators:** A clear `2px solid #3B82F6` ring is always visible on focus.
+- **Contrast:** All text meets WCAG AA standards (4.5:1).
+- **Screen Readers:** Announce widget state changes, timer updates (per minute), and lock status immediately.
+
+### 6.4. Responsive Design
+
+- **Desktop (1024px+):** Full 3-column layout.
+- **Tablet (768-1023px):** Widget zone collapses to icons; expansion overlays content.
+- **Mobile (<768px):** Single-column focus. Chat is primary, widgets are accessed via a bottom sheet.
+
+---
