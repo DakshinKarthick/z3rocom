@@ -1,321 +1,128 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
-import { AppHeader } from "@/components/app-header"
-import { WidgetZone, type Widget } from "@/components/widget-zone"
-import { ChatStream, type Message } from "@/components/chat-stream"
-import { MessageInput } from "@/components/message-input"
-
-export type LockState = "none" | "soft" | "hard"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { Terminal, ArrowRight, Users, Clock, Zap, Target } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 export default function HomePage() {
-  const [lockState, setLockState] = useState<LockState>("none")
-  const [distractionLevel, setDistractionLevel] = useState(15)
-
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "assistant",
-      author: "Assistant",
-      content: "Welcome! Type / to see available commands.",
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    },
-  ])
-
-  const [widgets, setWidgets] = useState<Widget[]>([])
-  const [expandedWidgets, setExpandedWidgets] = useState<Set<string>>(new Set())
-
-  const [timerMinutes, setTimerMinutes] = useState<number | null>(null)
-  const [pinnedAgenda, setPinnedAgenda] = useState("")
-  const [sessionActive, setSessionActive] = useState(false)
-  const [sessionData, setSessionData] = useState({
-    completedTasks: [] as string[],
-    incompleteTasks: [] as string[],
-    decisions: [] as string[],
-    blockers: [] as string[],
-  })
-
-  const messageInputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    const handleGlobalKeyboard = (e: KeyboardEvent) => {
-      // "/" focuses input
-      if (
-        e.key === "/" &&
-        document.activeElement?.tagName !== "INPUT" &&
-        document.activeElement?.tagName !== "TEXTAREA"
-      ) {
-        e.preventDefault()
-        messageInputRef.current?.focus()
-      }
-      // Esc collapses all widgets
-      if (e.key === "Escape") {
-        setExpandedWidgets(new Set())
-        announceToScreenReader("All widgets collapsed")
-      }
+    setMounted(true)
+    const activeSession = sessionStorage.getItem("z3ro-session")
+    if (activeSession) {
+      router.push("/session")
     }
+  }, [router])
 
-    window.addEventListener("keydown", handleGlobalKeyboard)
-    return () => window.removeEventListener("keydown", handleGlobalKeyboard)
-  }, [])
-
-  const announceToScreenReader = (message: string) => {
-    const announcement = document.createElement("div")
-    announcement.setAttribute("role", "status")
-    announcement.setAttribute("aria-live", "polite")
-    announcement.setAttribute("aria-atomic", "true")
-    announcement.className = "sr-only"
-    announcement.textContent = message
-    document.body.appendChild(announcement)
-    setTimeout(() => document.body.removeChild(announcement), 1000)
-  }
-
-  const handleSendMessage = (content: string) => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      author: "You",
-      content,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    }
-    setMessages((prev) => [...prev, newMessage])
-  }
-
-  const handleSessionEnd = useCallback(() => {
-    // Collapse all widgets
-    setExpandedWidgets(new Set())
-
-    // Gather session data
-    const taskWidgets = widgets.filter((w) => w.type === "tasks")
-    const allTasks = taskWidgets.flatMap((w) => w.tasks || [])
-    const completed = allTasks.filter((t) => t.completed).map((t) => t.text)
-    const incomplete = allTasks.filter((t) => !t.completed).map((t) => t.text)
-
-    // Create summary widget
-    const summaryWidget: Widget = {
-      id: `summary-${Date.now()}`,
-      type: "summary",
-      title: "Session Summary",
-      value: `${completed.length} completed`,
-      subtitle: `${incomplete.length} remaining`,
-      status: "active",
-      details: "Review your session outcomes",
-      summary: {
-        completedItems: completed,
-        incompleteItems: incomplete,
-        decisions: ["Focus maintained for deep work", "Task prioritization refined"],
-        blockers: incomplete.length > 3 ? ["Multiple tasks remain incomplete"] : [],
-        recommendations: [
-          completed.length > 0
-            ? "Great progress! Consider scheduling the next session."
-            : "No tasks completed. Try breaking work into smaller slices.",
-        ],
-      },
-    }
-
-    setWidgets((prev) => [summaryWidget, ...prev])
-    setExpandedWidgets(new Set([summaryWidget.id]))
-    setSessionActive(false)
-
-    announceToScreenReader("Session ended. Summary widget created with results.")
-
-    const systemMessage: Message = {
-      id: Date.now().toString(),
-      role: "system",
-      author: "System",
-      content: `Session ended. ${completed.length} tasks completed, ${incomplete.length} remaining.`,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    }
-    setMessages((prev) => [...prev, systemMessage])
-  }, [widgets])
-
-  const handleExecuteCommand = useCallback(
-    (command: string, args?: string) => {
-      let confirmationMessage = ""
-      let newWidget: Widget | null = null
-
-      switch (command) {
-        case "/end": {
-          handleSessionEnd()
-          return
-        }
-        case "/timer": {
-          const minutes = args ? Number.parseInt(args) : 25
-          setTimerMinutes(minutes)
-          setSessionActive(true)
-          confirmationMessage = `Timer started for ${minutes} minutes`
-          newWidget = {
-            id: `timer-${Date.now()}`,
-            type: "timer",
-            title: "Focus Timer",
-            value: `${minutes}:00`,
-            status: "active",
-            details: `Focus session of ${minutes} minutes. Stay focused and avoid distractions.`,
-          }
-          announceToScreenReader(`Timer started for ${minutes} minutes`)
-          break
-        }
-        case "/agenda": {
-          if (args) {
-            setPinnedAgenda(args)
-            confirmationMessage = `Agenda set: "${args}"`
-            newWidget = {
-              id: `agenda-${Date.now()}`,
-              type: "status",
-              title: "Today's Agenda",
-              value: args,
-              status: "active",
-              details: `Focus: ${args}`,
-            }
-            announceToScreenReader(`Agenda set to ${args}`)
-          } else {
-            confirmationMessage = "Please provide agenda text: /agenda <your agenda>"
-          }
-          break
-        }
-        case "/tasks": {
-          confirmationMessage = "Task Slice Board created. Start tracking your work."
-          newWidget = {
-            id: `tasks-${Date.now()}`,
-            type: "tasks",
-            title: "Task Slice Board",
-            value: "0 / 0",
-            subtitle: "Ready to start",
-            status: "idle",
-            details: "Add tasks to start tracking progress. Break work into small slices.",
-            tasks: [],
-          }
-          announceToScreenReader("Task Slice Board widget created")
-          break
-        }
-        default:
-          confirmationMessage = `Command ${command} executed.`
-      }
-
-      if (newWidget) {
-        setWidgets((prev) => [...prev, newWidget])
-        setExpandedWidgets((prev) => new Set([...prev, newWidget.id]))
-      }
-
-      const systemMessage: Message = {
-        id: Date.now().toString(),
-        role: "system",
-        author: "System",
-        content: confirmationMessage,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      }
-      setMessages((prev) => [...prev, systemMessage])
-    },
-    [handleSessionEnd],
-  )
-
-  const handleDistractionChange = useCallback(
-    (level: number) => {
-      setDistractionLevel(level)
-
-      if (level >= 80) {
-        if (lockState !== "hard") {
-          setLockState("hard")
-          announceToScreenReader("Hard lock activated. Distraction level critical. Chat disabled.")
-          const lockMessage: Message = {
-            id: Date.now().toString(),
-            role: "system",
-            author: "System",
-            content: "🔒 Hard lock activated. Distraction level critical. Chat disabled until focus restored.",
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          }
-          setMessages((prev) => [...prev, lockMessage])
-        }
-      } else if (level >= 60) {
-        if (lockState !== "soft") {
-          setLockState("soft")
-          announceToScreenReader("Soft lock enabled. Deep-work commands temporarily disabled.")
-          const warnMessage: Message = {
-            id: Date.now().toString(),
-            role: "system",
-            author: "System",
-            content: "⚠️ Soft lock enabled. Distraction level elevated. Deep-work commands temporarily disabled.",
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          }
-          setMessages((prev) => [...prev, warnMessage])
-        }
-      } else {
-        if (lockState !== "none") {
-          setLockState("none")
-          announceToScreenReader("Locks cleared. Focus restored.")
-          const unlockMessage: Message = {
-            id: Date.now().toString(),
-            role: "system",
-            author: "System",
-            content: "✓ Locks cleared. Focus restored. All commands available.",
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          }
-          setMessages((prev) => [...prev, unlockMessage])
-        }
-      }
-    },
-    [lockState, setMessages],
-  )
-
-  const toggleWidget = useCallback((id: string) => {
-    setExpandedWidgets((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(id)) {
-        newSet.delete(id)
-        announceToScreenReader("Widget collapsed")
-      } else {
-        newSet.add(id)
-        announceToScreenReader("Widget expanded")
-      }
-      return newSet
-    })
-  }, [])
-
-  const handleUpdateWidget = useCallback((id: string, updates: Partial<Widget>) => {
-    setWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, ...updates } : w)))
-  }, [])
+  if (!mounted) return null
 
   return (
-    <div className="flex h-screen flex-col" style={{ backgroundColor: "#0D0D0D" }}>
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:p-2 focus:ring-2 focus:ring-[#3B82F6]"
-        style={{ backgroundColor: "#1A1A1A", color: "#FFFFFF" }}
-      >
-        Skip to main content
-      </a>
+    <div className="min-h-screen flex flex-col grid-bg" style={{ backgroundColor: "#0a0a0b" }}>
+      <div className="scanline-overlay" />
 
-      {/* Fixed Header - 48px */}
-      <AppHeader
-        timerMinutes={timerMinutes}
-        pinnedAgenda={pinnedAgenda}
-        onAgendaChange={setPinnedAgenda}
-        distractionLevel={distractionLevel}
-        onDistractionChange={handleDistractionChange}
-        lockState={lockState}
-        onSessionEnd={handleSessionEnd}
-      />
+      {/* Header */}
+      <header className="h-12 flex items-center justify-between px-6 border-b border-[#1a1a1f]">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#111113] border border-[#27272a]">
+            <Terminal className="h-4 w-4 text-[#3b82f6]" />
+          </div>
+          <span className="font-mono text-sm font-bold tracking-tight text-[#fafafa]">Z3RO</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="font-mono text-xs text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#111113]"
+            onClick={() => router.push("/archive")}
+          >
+            Archive
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="font-mono text-xs text-[#52525b] hover:text-[#a1a1aa] hover:bg-[#111113]"
+            onClick={() => router.push("/preferences")}
+          >
+            Settings
+          </Button>
+        </div>
+      </header>
 
-      <div id="main-content" className="flex flex-1 gap-1 overflow-hidden flex-col md:flex-row pb-12 md:pb-0">
-        {/* Widget Zone - Persistent scrollable column */}
-        <WidgetZone
-          widgets={widgets}
-          expandedWidgets={expandedWidgets}
-          onToggleWidget={toggleWidget}
-          onUpdateWidget={handleUpdateWidget}
-        />
+      {/* Main content */}
+      <main className="flex-1 flex items-center justify-center p-6">
+        <div className="max-w-xl w-full space-y-12">
+          {/* Hero */}
+          <div className="text-center space-y-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#111113] border border-[#27272a]">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#10b981] animate-pulse" />
+              <span className="font-mono text-xs text-[#a1a1aa]">Ready to focus</span>
+            </div>
 
-        {/* Chat Stream - Disposable secondary column */}
-        <ChatStream messages={messages} />
-      </div>
+            <div className="space-y-3">
+              <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-[#fafafa]">
+                Z<span className="text-[#3b82f6]">3</span>RO
+              </h1>
+              <p className="font-mono text-base text-[#52525b] max-w-md mx-auto">
+                Command-driven focus sessions for deep work
+              </p>
+            </div>
+          </div>
 
-      {/* Fixed Message Input - 56px */}
-      <MessageInput
-        ref={messageInputRef}
-        onSendMessage={handleSendMessage}
-        onExecuteCommand={handleExecuteCommand}
-        lockState={lockState}
-      />
+          {/* Features grid */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { icon: Clock, label: "Pomodoro+", desc: "25/45/90m presets" },
+              { icon: Target, label: "Intent Lock", desc: "Agenda-first design" },
+              { icon: Zap, label: "Commands", desc: "Keyboard-native" },
+            ].map(({ icon: Icon, label, desc }) => (
+              <div
+                key={label}
+                className="p-4 rounded-xl bg-[#111113] border border-[#1a1a1f] hover:border-[#27272a] transition-colors"
+              >
+                <Icon className="h-5 w-5 text-[#3b82f6] mb-3" />
+                <p className="font-medium text-sm text-[#fafafa]">{label}</p>
+                <p className="font-mono text-xs text-[#52525b] mt-1">{desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA buttons */}
+          <div className="space-y-3">
+            <Button
+              onClick={() => router.push("/setup")}
+              className="w-full h-14 font-mono text-base bg-[#3b82f6] hover:bg-[#2563eb] rounded-xl group"
+            >
+              <span>Start New Session</span>
+              <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-0.5 transition-transform" />
+            </Button>
+
+            <Button
+              onClick={() => router.push("/join")}
+              variant="outline"
+              className="w-full h-12 font-mono border-[#27272a] hover:bg-[#111113] bg-transparent text-[#a1a1aa] rounded-xl"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Join Existing Session
+            </Button>
+          </div>
+
+          {/* Quick tip */}
+          <div className="flex items-center justify-center gap-2 text-center">
+            <kbd className="px-2 py-1 rounded bg-[#111113] border border-[#27272a] font-mono text-xs text-[#52525b]">
+              /
+            </kbd>
+            <span className="font-mono text-xs text-[#3f3f46]">opens command palette during sessions</span>
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="h-8 flex items-center justify-center px-6 border-t border-[#1a1a1f]">
+        <span className="font-mono text-xs text-[#3f3f46]">Focus. Execute. Ship.</span>
+      </footer>
     </div>
   )
 }

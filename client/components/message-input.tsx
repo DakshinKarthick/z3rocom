@@ -1,14 +1,13 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, forwardRef } from "react"
-import { Send, Paperclip, Clock, Target, CheckSquare } from "lucide-react"
+import { Send, Terminal, Lock, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import type { LockState } from "@/app/page"
+import type { LockState } from "@/components/app-header"
 
 interface MessageInputProps {
   onSendMessage?: (message: string) => void
@@ -27,34 +26,15 @@ export const MessageInput = forwardRef<HTMLInputElement, MessageInputProps>(func
   const deepWorkCommands = ["/code", "/progress"]
 
   const commands = [
-    {
-      value: "/timer",
-      label: "/timer",
-      icon: Clock,
-      description: "Start a focus timer (25/45/90 min)",
-      disabled: false,
-    },
-    {
-      value: "/agenda",
-      label: "/agenda",
-      icon: Target,
-      description: "Set your agenda for today",
-      disabled: false,
-    },
-    {
-      value: "/tasks",
-      label: "/tasks",
-      icon: CheckSquare,
-      description: "Create a task widget",
-      disabled: false,
-    },
-    {
-      value: "/end",
-      label: "/end",
-      icon: CheckSquare,
-      description: "End session and show summary",
-      disabled: false,
-    },
+    { value: "/timer", label: "/timer", description: "Start focus timer", disabled: false },
+    { value: "/agenda", label: "/agenda", description: "Set session agenda", disabled: false },
+    { value: "/tasks", label: "/tasks", description: "Create task board", disabled: false },
+    { value: "/decision", label: "/decision", description: "Log a decision", disabled: false },
+    { value: "/blocker", label: "/blocker", description: "Flag a blocker", disabled: false },
+    { value: "/code", label: "/code", description: "Open code snippet", disabled: lockState === "soft" },
+    { value: "/progress", label: "/progress", description: "Progress check", disabled: lockState === "soft" },
+    { value: "/next", label: "/next", description: "Plan next session", disabled: false },
+    { value: "/end", label: "/end", description: "End session", disabled: false },
   ]
 
   useEffect(() => {
@@ -68,16 +48,11 @@ export const MessageInput = forwardRef<HTMLInputElement, MessageInputProps>(func
 
   const handleSend = () => {
     if (!message.trim()) return
-
     if (lockState === "hard") return
 
     if (message.startsWith("/")) {
       const [command, ...args] = message.split(" ")
-
-      if (lockState === "soft" && deepWorkCommands.includes(command)) {
-        return
-      }
-
+      if (lockState === "soft" && deepWorkCommands.includes(command)) return
       onExecuteCommand?.(command, args.join(" "))
       setMessage("")
       setShowCommands(false)
@@ -120,129 +95,106 @@ export const MessageInput = forwardRef<HTMLInputElement, MessageInputProps>(func
     setShowCommands(false)
   }
 
-  const getBorderStyle = () => {
+  const getInputStyle = () => {
     if (lockState === "hard") {
-      return {
-        borderColor: "#EF4444",
-        borderWidth: "2px",
-        boxShadow: "0 0 0 2px #EF4444",
-      }
+      return "border-[#ef4444] glow-red-pulse"
     }
     if (lockState === "soft") {
-      return {
-        borderColor: "#F59E0B",
-        borderWidth: "2px",
-        boxShadow: "0 0 8px rgba(245, 158, 11, 0.5)",
-      }
+      return "border-[#f59e0b] glow-amber"
     }
-    return {}
+    return "border-[#27272a] focus-visible:border-[#3b82f6]"
+  }
+
+  const getLockIcon = () => {
+    if (lockState === "hard") {
+      return <Lock className="h-4 w-4 text-[#ef4444] pulse-critical" />
+    }
+    if (lockState === "soft") {
+      return <AlertTriangle className="h-4 w-4 text-[#f59e0b]" />
+    }
+    return <Terminal className="h-4 w-4 text-[#3b82f6]" />
+  }
+
+  const getPlaceholder = () => {
+    if (lockState === "hard") return "LOCKED — complete agenda to unlock"
+    if (lockState === "soft") return "SOFT LOCK — deep-work commands disabled"
+    return "/ for commands..."
   }
 
   return (
     <div
-      className="flex h-14 items-center gap-1 px-4"
-      style={{ backgroundColor: "#1A1A1A" }}
+      className="flex h-14 items-center gap-3 px-4 border-t border-[#1a1a1f] bg-[#0a0a0b]"
       role="region"
-      aria-label="Message input"
+      aria-label="Command input"
     >
-      <div className="flex flex-1 items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0 focus-visible:ring-2 focus-visible:ring-[#3B82F6]"
-          disabled={lockState === "hard"}
-          aria-label="Attach file"
-        >
-          <Paperclip className="h-4 w-4" style={{ color: lockState === "hard" ? "#52525B" : "#A1A1AA" }} />
-        </Button>
-
-        <Popover open={showCommands} onOpenChange={setShowCommands}>
-          <PopoverTrigger asChild>
-            <div className="flex-1">
-              <Input
-                ref={ref}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  lockState === "hard"
-                    ? "Chat locked - reduce distraction to unlock"
-                    : lockState === "soft"
-                      ? "Soft lock active - deep-work commands disabled"
-                      : "Type a message or / for commands..."
-                }
-                disabled={lockState === "hard"}
-                className="h-9 border-0 focus-visible:ring-2 focus-visible:ring-[#3B82F6] transition-all"
-                style={{
-                  backgroundColor: "#262626",
-                  color: "#FFFFFF",
-                  ...getBorderStyle(),
-                }}
-                aria-label="Message input field"
-                aria-describedby={lockState !== "none" ? "lock-status" : undefined}
-              />
-              {lockState !== "none" && (
-                <span id="lock-status" className="sr-only">
-                  {lockState === "hard"
-                    ? "Chat is hard locked due to high distraction level"
-                    : "Soft lock is active, deep work commands are disabled"}
-                </span>
-              )}
-            </div>
-          </PopoverTrigger>
-          <PopoverContent
-            className="p-0 border-0"
-            style={{ backgroundColor: "#262626" }}
-            align="start"
-            side="top"
-            sideOffset={8}
-          >
-            <Command style={{ backgroundColor: "#262626" }} className="border-0">
-              <CommandList>
-                <CommandEmpty style={{ color: "#52525B" }}>No commands found.</CommandEmpty>
-                <CommandGroup>
-                  {commands.map((command, index) => (
-                    <CommandItem
-                      key={command.value}
-                      value={command.value}
-                      onSelect={handleCommandSelect}
-                      disabled={command.disabled}
-                      className="focus-visible:ring-2 focus-visible:ring-[#3B82F6]"
-                      style={{
-                        backgroundColor: index === selectedIndex ? "#1A1A1A" : "transparent",
-                        color: command.disabled ? "#52525B" : "#FFFFFF",
-                        opacity: command.disabled ? 0.5 : 1,
-                      }}
-                    >
-                      <command.icon className="mr-2 h-4 w-4" style={{ color: "#3B82F6" }} />
-                      <div className="flex-1">
-                        <div className="font-medium">{command.label}</div>
-                        <div className="text-xs" style={{ color: "#52525B" }}>
-                          {command.description}
-                        </div>
-                      </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-
-        <Button
-          onClick={handleSend}
-          disabled={!message.trim() || lockState === "hard"}
-          size="icon"
-          className="h-8 w-8 shrink-0 focus-visible:ring-2 focus-visible:ring-[#3B82F6]"
-          style={{
-            backgroundColor: message.trim() && lockState !== "hard" ? "#3B82F6" : "#262626",
-            color: "#FFFFFF",
-          }}
-          aria-label="Send message"
-        >
-          <Send className="h-4 w-4" />
-        </Button>
+      <div className="flex items-center gap-2 shrink-0">
+        {getLockIcon()}
+        <span className="font-mono text-xs text-[#3f3f46] hidden sm:inline">$</span>
       </div>
+
+      <Popover open={showCommands} onOpenChange={setShowCommands}>
+        <PopoverTrigger asChild>
+          <div className="flex-1">
+            <Input
+              ref={ref}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={getPlaceholder()}
+              disabled={lockState === "hard"}
+              className={`h-9 bg-[#111113] font-mono text-sm text-[#fafafa] placeholder:text-[#3f3f46] focus-visible:ring-0 rounded-lg transition-all ${getInputStyle()}`}
+              aria-label="Command input"
+            />
+          </div>
+        </PopoverTrigger>
+
+        <PopoverContent
+          className="p-0 border border-[#27272a] bg-[#111113] rounded-lg shadow-2xl"
+          align="start"
+          side="top"
+          sideOffset={8}
+        >
+          <Command className="bg-transparent">
+            <CommandList className="max-h-64">
+              <CommandEmpty className="py-3 px-4 font-mono text-sm text-[#52525b]">No commands found.</CommandEmpty>
+              <CommandGroup>
+                {commands.map((command, index) => (
+                  <CommandItem
+                    key={command.value}
+                    value={command.value}
+                    onSelect={handleCommandSelect}
+                    disabled={command.disabled}
+                    className={`py-2.5 px-4 cursor-pointer rounded-md mx-1 my-0.5 ${
+                      index === selectedIndex ? "bg-[#1a1a1f]" : ""
+                    } ${command.disabled ? "opacity-40" : ""}`}
+                  >
+                    <div className="flex items-center gap-4 w-full">
+                      <span
+                        className="font-mono text-sm font-medium w-24"
+                        style={{ color: command.disabled ? "#52525b" : "#3b82f6" }}
+                      >
+                        {command.label}
+                      </span>
+                      <span className="text-xs text-[#52525b] flex-1">{command.description}</span>
+                      {command.disabled && <Lock className="h-3 w-3 text-[#f59e0b]" />}
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      <Button
+        onClick={handleSend}
+        disabled={!message.trim() || lockState === "hard"}
+        size="icon"
+        className="h-9 w-9 shrink-0 bg-[#3b82f6] hover:bg-[#2563eb] disabled:bg-[#1a1a1f] disabled:opacity-50 rounded-lg focus-ring"
+        aria-label="Send message"
+      >
+        <Send className="h-4 w-4" />
+      </Button>
     </div>
   )
 })

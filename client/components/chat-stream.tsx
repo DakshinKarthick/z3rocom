@@ -1,16 +1,16 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useEffect, useRef } from "react"
-import { Bot, User, X, Users } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { Bot, User, Terminal, Users, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Badge } from "@/components/ui/badge"
+
+export type MessageType = "user" | "system" | "command-echo"
 
 export interface Message {
   id: string
-  role: "user" | "assistant" | "system"
+  type: MessageType
   author: string
   content: string
   timestamp: string
@@ -21,15 +21,16 @@ interface ChatStreamProps {
   onAddMessage?: (message: Message) => void
 }
 
-export function ChatStream({ messages, onAddMessage }: ChatStreamProps) {
-  const [isVisible, setIsVisible] = useState(true)
+export function ChatStream({ messages }: ChatStreamProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [participants] = useState([
     { id: "1", name: "You", online: true },
-    { id: "2", name: "Assistant", online: true },
+    { id: "2", name: "System", online: true },
   ])
 
+  // Auto-scroll with 400ms smooth behavior
   useEffect(() => {
     if (isAutoScrollEnabled && scrollRef.current) {
       const scrollElement = scrollRef.current.querySelector("[data-radix-scroll-area-viewport]")
@@ -42,99 +43,145 @@ export function ChatStream({ messages, onAddMessage }: ChatStreamProps) {
     }
   }, [messages, isAutoScrollEnabled])
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.target as HTMLDivElement
     const isAtBottom = Math.abs(target.scrollHeight - target.scrollTop - target.clientHeight) < 50
     setIsAutoScrollEnabled(isAtBottom)
+  }, [])
+
+  const copyMessage = async (id: string, content: string) => {
+    // Strip formatting for system messages
+    await navigator.clipboard.writeText(content)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 2000)
   }
 
-  if (!isVisible) return null
+  // Group consecutive messages from same author
+  const groupedMessages = messages.reduce<{ messages: Message[]; showHeader: boolean }[]>((acc, msg, i) => {
+    const prevMsg = messages[i - 1]
+    const showHeader = !prevMsg || prevMsg.author !== msg.author || prevMsg.type !== msg.type
+
+    if (showHeader) {
+      acc.push({ messages: [msg], showHeader: true })
+    } else {
+      acc[acc.length - 1].messages.push(msg)
+    }
+
+    return acc
+  }, [])
+
+  const getMessageStyles = (type: MessageType) => {
+    switch (type) {
+      case "command-echo":
+        return {
+          authorColor: "#3b82f6",
+          textColor: "#a1a1aa",
+          bgColor: "transparent",
+          font: "font-mono",
+          icon: <Terminal className="h-3 w-3 text-[#3b82f6]" />,
+        }
+      case "system":
+        return {
+          authorColor: "#52525b",
+          textColor: "#a1a1aa",
+          bgColor: "transparent",
+          font: "",
+          icon: <Bot className="h-3 w-3 text-[#52525b]" />,
+        }
+      default:
+        return {
+          authorColor: "#52525b",
+          textColor: "#52525b", // Tertiary to recede
+          bgColor: "transparent",
+          font: "",
+          icon: <User className="h-3 w-3 text-[#52525b]" />,
+        }
+    }
+  }
 
   return (
-    <div className="relative flex flex-1 flex-col p-1" style={{ backgroundColor: "#0D0D0D" }}>
-      <div className="flex h-full flex-col rounded-md" style={{ backgroundColor: "#1A1A1A" }}>
-        {/* Header */}
-        <div
-          className="flex items-center justify-between border-b p-3"
-          style={{ borderColor: "#262626" }}
-          role="region"
-          aria-label="Chat stream header"
-        >
-          <div className="flex items-center gap-2">
-            <Bot className="h-4 w-4" style={{ color: "#3B82F6" }} />
-            <span className="text-sm font-semibold" style={{ color: "#FFFFFF" }}>
-              Chat Stream
-            </span>
-            <Badge
-              variant="secondary"
-              className="h-5 px-2 text-xs border-0 flex items-center gap-1"
-              style={{
-                backgroundColor: "#262626",
-                color: "#A1A1AA",
-              }}
-            >
-              <Users className="h-3 w-3" />
-              {participants.length}
-            </Badge>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 focus-visible:ring-2 focus-visible:ring-[#3B82F6] hidden md:flex"
-            onClick={() => setIsVisible(false)}
-            aria-label="Close chat stream"
-          >
-            <X className="h-3 w-3" style={{ color: "#A1A1AA" }} />
-          </Button>
+    <div className="flex flex-col w-full md:w-80 lg:w-96 shrink-0 border-l border-[#1a1a1f]">
+      {/* Header */}
+      <div className="flex items-center justify-between h-10 px-3 border-b border-[#1a1a1f]">
+        <div className="flex items-center gap-2">
+          <Terminal className="h-3 w-3 text-[#3f3f46]" />
+          <span className="font-mono text-xs uppercase tracking-wider text-[#3f3f46]">Stream</span>
         </div>
-
-        <ScrollArea ref={scrollRef} className="flex-1" onScrollCapture={handleScroll}>
-          <div className="flex flex-col items-center p-3">
-            <div className="w-full max-w-[680px] space-y-1" role="log" aria-label="Chat messages" aria-live="polite">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className="flex gap-2 py-1"
-                  role="article"
-                  aria-label={`Message from ${message.author}`}
-                >
-                  <div
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded"
-                    style={{
-                      backgroundColor:
-                        message.role === "assistant" ? "#262626" : message.role === "system" ? "#1A1A1A" : "#3B82F6",
-                    }}
-                  >
-                    {message.role === "assistant" ? (
-                      <Bot className="h-3 w-3" style={{ color: "#3B82F6" }} />
-                    ) : message.role === "system" ? (
-                      <span className="text-xs" style={{ color: "#52525B" }}>
-                        •
-                      </span>
-                    ) : (
-                      <User className="h-3 w-3" style={{ color: "#FFFFFF" }} />
-                    )}
-                  </div>
-
-                  <div className="flex-1 space-y-0.5">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xs font-medium" style={{ color: "#A1A1AA" }}>
-                        {message.author}
-                      </span>
-                      <span className="font-mono text-xs" style={{ color: "#52525B" }}>
-                        {message.timestamp}
-                      </span>
-                    </div>
-                    <p className="text-sm leading-relaxed" style={{ color: "#52525B" }}>
-                      {message.content}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </ScrollArea>
+        <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#111113]">
+          <Users className="h-3 w-3 text-[#52525b]" />
+          <span className="font-mono text-xs text-[#52525b]">{participants.length}</span>
+        </div>
       </div>
+
+      {/* Messages - max width 680px, narrower than widgets */}
+      <ScrollArea ref={scrollRef} className="flex-1" onScrollCapture={handleScroll}>
+        <div className="p-3 space-y-3">
+          <div className="max-w-[680px]" role="log" aria-label="Chat messages" aria-live="polite">
+            {groupedMessages.map((group, groupIndex) => (
+              <div key={groupIndex} className="space-y-0.5">
+                {group.messages.map((message, msgIndex) => {
+                  const styles = getMessageStyles(message.type)
+                  const showHeader = msgIndex === 0
+
+                  return (
+                    <div
+                      key={message.id}
+                      className="message-row group flex gap-2 py-1 rounded hover:bg-[#111113]/50 px-1 -mx-1"
+                      role="article"
+                      aria-label={`Message from ${message.author}`}
+                    >
+                      {/* Avatar - only show for first in group */}
+                      <div className="w-5 shrink-0">
+                        {showHeader && (
+                          <div className="flex h-5 w-5 items-center justify-center rounded">{styles.icon}</div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        {/* Author + timestamp header */}
+                        {showHeader && (
+                          <div className="flex items-baseline gap-2 mb-0.5">
+                            <span className="text-xs font-medium" style={{ color: styles.authorColor }}>
+                              {message.author}
+                            </span>
+                            <span className="font-mono text-xs text-[#3f3f46]">{message.timestamp}</span>
+                          </div>
+                        )}
+
+                        {/* Content */}
+                        <p className={`text-sm leading-relaxed ${styles.font}`} style={{ color: styles.textColor }}>
+                          {message.content}
+                        </p>
+                      </div>
+
+                      {/* Copy button - visible on hover */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="copy-btn h-5 w-5 shrink-0"
+                        onClick={() => copyMessage(message.id, message.content)}
+                      >
+                        {copiedId === message.id ? (
+                          <Check className="h-3 w-3 text-[#10b981]" />
+                        ) : (
+                          <Copy className="h-3 w-3 text-[#3f3f46]" />
+                        )}
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+
+            {messages.length === 0 && (
+              <div className="text-center py-8">
+                <Terminal className="h-5 w-5 mx-auto mb-2 text-[#27272a]" />
+                <p className="font-mono text-xs text-[#3f3f46]">No messages yet</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </ScrollArea>
     </div>
   )
 }
