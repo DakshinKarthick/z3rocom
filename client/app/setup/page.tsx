@@ -6,12 +6,14 @@ import { useRouter } from "next/navigation"
 import { Terminal, Clock, ArrowRight, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { createSession } from "@/lib/supabase/chat"
 
 export default function SetupPage() {
   const router = useRouter()
   const [sessionName, setSessionName] = useState("")
   const [agenda, setAgenda] = useState("")
   const [duration, setDuration] = useState(45)
+  const [isStarting, setIsStarting] = useState(false)
   const agendaInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -34,20 +36,40 @@ export default function SetupPage() {
     }
   }
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!agenda.trim()) return
+    if (isStarting) return
 
-    const sessionData = {
-      id: Date.now().toString(),
-      name: sessionName.trim() || `Session ${new Date().toLocaleDateString()}`,
-      agenda: agenda.trim(),
-      duration,
-      creator: "you",
-      createdAt: new Date().toISOString(),
+    setIsStarting(true)
+    try {
+      const session = await createSession({
+        name: sessionName.trim() || `Session ${new Date().toLocaleDateString()}`,
+        agenda: agenda.trim(),
+        durationMinutes: duration,
+        hostDisplayName: "You",
+      })
+
+      sessionStorage.setItem(
+        "z3ro-session",
+        JSON.stringify({
+          id: session.id,
+          code: session.code,
+          name: session.name,
+          agenda: session.agenda,
+          duration: session.duration_minutes,
+          creator: "you",
+          createdAt: session.created_at,
+        }),
+      )
+      sessionStorage.setItem("z3ro-display-name", "You")
+      router.push("/session")
+    } catch (error) {
+      console.error("Failed to create session:", error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      alert(`Failed to start session: ${errorMessage}`)
+    } finally {
+      setIsStarting(false)
     }
-
-    sessionStorage.setItem("z3ro-session", JSON.stringify(sessionData))
-    router.push("/chat")
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -176,7 +198,7 @@ export default function SetupPage() {
               </Button>
               <Button
                 onClick={handleStart}
-                disabled={!canStart}
+                disabled={!canStart || isStarting}
                 className="flex-1 h-12 font-mono bg-[#3b82f6] hover:bg-[#2563eb] disabled:opacity-30 rounded-xl group"
               >
                 <span>Start Session</span>

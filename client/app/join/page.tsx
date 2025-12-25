@@ -7,9 +7,11 @@ import { useRouter } from "next/navigation"
 import { Terminal, Users, Clock, Target, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { getMemberCount, getSessionByCode, joinSession } from "@/lib/supabase/chat"
 
 interface SessionPreview {
   id: string
+  code: string
   name: string
   agenda: string
   duration: number
@@ -23,45 +25,73 @@ export default function JoinPage() {
   const [displayName, setDisplayName] = useState("")
   const [preview, setPreview] = useState<SessionPreview | null>(null)
   const [isValidating, setIsValidating] = useState(false)
+  const [isJoining, setIsJoining] = useState(false)
   const codeInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     codeInputRef.current?.focus()
   }, [])
 
-  // Simulate code validation (MVP - stub)
   useEffect(() => {
     if (sessionCode.length === 6) {
       setIsValidating(true)
-      // Simulate API call
-      setTimeout(() => {
-        // Mock session data
-        setPreview({
-          id: sessionCode,
-          name: "Team Standup",
-          agenda: "Review sprint progress and blockers",
-          duration: 45,
-          participants: 3,
-          timeRemaining: 32,
-        })
-        setIsValidating(false)
-      }, 500)
+      const handle = window.setTimeout(async () => {
+        try {
+          const session = await getSessionByCode(sessionCode)
+          const participants = await getMemberCount(session.id)
+
+          const timeRemaining = session.timer_ends_at
+            ? Math.max(0, Math.ceil((new Date(session.timer_ends_at).getTime() - Date.now()) / 60000))
+            : session.duration_minutes
+
+          setPreview({
+            id: session.id,
+            code: session.code,
+            name: session.name,
+            agenda: session.agenda,
+            duration: session.duration_minutes,
+            participants,
+            timeRemaining,
+          })
+        } catch {
+          setPreview(null)
+        } finally {
+          setIsValidating(false)
+        }
+      }, 350)
+
+      return () => window.clearTimeout(handle)
     } else {
       setPreview(null)
     }
   }, [sessionCode])
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     if (!preview) return
+    if (isJoining) return
 
-    const joinData = {
-      sessionId: preview.id,
-      displayName: displayName.trim() || "Guest",
-      joinedAt: new Date().toISOString(),
+    setIsJoining(true)
+    try {
+      const name = displayName.trim() || "Guest"
+      await joinSession({ sessionId: preview.id, displayName: name })
+
+      sessionStorage.setItem(
+        "z3ro-session",
+        JSON.stringify({
+          id: preview.id,
+          code: preview.code,
+          name: preview.name,
+          agenda: preview.agenda,
+          duration: preview.duration,
+          creator: "host",
+          createdAt: new Date().toISOString(),
+        }),
+      )
+      sessionStorage.setItem("z3ro-display-name", name)
+      router.push("/session")
+    } finally {
+      setIsJoining(false)
     }
-
-    sessionStorage.setItem("z3ro-join", JSON.stringify(joinData))
-    router.push("/session")
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -225,7 +255,7 @@ export default function JoinPage() {
               </Button>
               <Button
                 onClick={handleJoin}
-                disabled={!preview}
+                disabled={!preview || isJoining}
                 className="flex-1 h-11 font-mono bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <span>Join Session</span>

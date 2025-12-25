@@ -10,8 +10,10 @@ export type SessionStatus = "idle" | "active" | "paused" | "ended"
 
 interface AppHeaderProps {
   timerMinutes?: number | null
+  timerEndsAt?: string | null
   pinnedAgenda?: string
   onAgendaChange?: (agenda: string) => void
+  onTimerSetMinutes?: (minutes: number) => void
   distractionLevel?: number
   onDistractionChange?: (level: number) => void
   lockState?: LockState
@@ -23,8 +25,10 @@ interface AppHeaderProps {
 
 export function AppHeader({
   timerMinutes,
+  timerEndsAt = null,
   pinnedAgenda = "",
   onAgendaChange,
+  onTimerSetMinutes,
   distractionLevel = 15,
   onDistractionChange,
   lockState = "none",
@@ -37,17 +41,44 @@ export function AppHeader({
   const [timeLeft, setTimeLeft] = useState(0)
   const [isTimerRunning, setIsTimerRunning] = useState(false)
   const [lastMinuteAnnounced, setLastMinuteAnnounced] = useState(-1)
-  const [hasTimerStarted, setHasTimerStarted] = useState(false)
+  const [timerInitialized, setTimerInitialized] = useState(false)
 
+  // Prefer synced timer from timerEndsAt.
   useEffect(() => {
+    if (!timerEndsAt) return
+
+    const computeLeft = () => {
+      const ms = new Date(timerEndsAt).getTime() - Date.now()
+      return Math.max(0, Math.floor(ms / 1000))
+    }
+
+    const initial = computeLeft()
+    setTimeLeft(initial)
+    setIsTimerRunning(initial > 0)
+    setTimerInitialized(true)
+
+    const interval = window.setInterval(() => {
+      const next = computeLeft()
+      setTimeLeft(next)
+      setIsTimerRunning(next > 0)
+    }, 1000)
+
+    return () => window.clearInterval(interval)
+  }, [timerEndsAt])
+
+  // Fallback (local-only) timer when timerEndsAt isn't used.
+  useEffect(() => {
+    if (timerEndsAt) return
     if (timerMinutes) {
       setTimeLeft(timerMinutes * 60)
       setIsTimerRunning(true)
-      setHasTimerStarted(true)
+      setTimerInitialized(true)
     }
-  }, [timerMinutes])
+  }, [timerMinutes, timerEndsAt])
 
   useEffect(() => {
+    if (timerEndsAt) return
+
     if (isTimerRunning && timeLeft > 0) {
       const interval = setInterval(() => {
         setTimeLeft((prev) => {
@@ -60,13 +91,16 @@ export function AppHeader({
       }, 1000)
       return () => clearInterval(interval)
     }
-  }, [isTimerRunning, timeLeft])
+  }, [isTimerRunning, timeLeft, timerEndsAt])
 
   useEffect(() => {
-    if (hasTimerStarted && timeLeft === 0 && !isTimerRunning && timerMinutes) {
+    if (!timerInitialized) return // Don't end session until timer is initialized
+    const hasTimer = Boolean(timerEndsAt || timerMinutes)
+    if (!hasTimer) return
+    if (timeLeft === 0 && !isTimerRunning) {
       onSessionEnd?.()
     }
-  }, [hasTimerStarted, timeLeft, isTimerRunning, timerMinutes, onSessionEnd])
+  }, [timeLeft, isTimerRunning, timerMinutes, timerEndsAt, onSessionEnd, timerInitialized])
 
   // Screen reader announcements per minute
   useEffect(() => {
@@ -92,9 +126,12 @@ export function AppHeader({
   }, [])
 
   const startTimer = (minutes: number) => {
+    if (onTimerSetMinutes) {
+      onTimerSetMinutes(minutes)
+      return
+    }
     setTimeLeft(minutes * 60)
     setIsTimerRunning(true)
-    setHasTimerStarted(true)
   }
 
   const handleAgendaSubmit = () => {

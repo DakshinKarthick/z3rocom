@@ -7,9 +7,22 @@ import { WidgetZone, type Widget } from "@/components/widget-zone"
 import { ChatStream, type Message, type MessageType } from "@/components/chat-stream"
 import { MessageInput } from "@/components/message-input"
 import { SystemStatusBar } from "@/components/system-status-bar"
+import type { DbMessage, DbSession } from "@/lib/supabase/model"
+import {
+  getSessionById,
+  insertMessage,
+  joinSession,
+  listMessages,
+  setAgenda,
+  setTimerEndsAt,
+  subscribeToMessages,
+  subscribeToSession,
+} from "@/lib/supabase/chat"
+import { toTimeLabel } from "@/lib/supabase/helpers"
 
 interface SessionData {
   id: string
+  code?: string
   name: string
   agenda: string
   duration: number
@@ -27,43 +40,129 @@ export default function SessionPage() {
   const [sessionData, setSessionData] = useState<SessionData | null>(null)
   const [messageCount, setMessageCount] = useState(0)
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null)
+  const [displayName, setDisplayName] = useState("You")
 
   const [messages, setMessages] = useState<Message[]>([])
   const [widgets, setWidgets] = useState<Widget[]>([])
   const [expandedWidgets, setExpandedWidgets] = useState<Set<string>>(new Set())
 
   const [timerMinutes, setTimerMinutes] = useState<number | null>(null)
+  const [timerEndsAt, setTimerEndsAtState] = useState<string | null>(null)
   const [pinnedAgenda, setPinnedAgenda] = useState("")
 
   const messageInputRef = useRef<HTMLInputElement>(null)
+  const seenMessageIdsRef = useRef<Set<string>>(new Set())
+
+  const dbToUiMessage = useCallback((m: DbMessage): Message => {
+    return {
+      id: m.id,
+      type: m.kind as MessageType,
+      author: m.author_name,
+      content: m.content,
+      timestamp: toTimeLabel(m.created_at),
+    }
+  }, [])
+
+  const addDbMessage = useCallback(
+    (m: DbMessage) => {
+      if (seenMessageIdsRef.current.has(m.id)) return
+      seenMessageIdsRef.current.add(m.id)
+      setMessages((prev) => [...prev, dbToUiMessage(m)])
+    },
+    [dbToUiMessage],
+  )
 
   // Load session data
   useEffect(() => {
     const stored = sessionStorage.getItem("z3ro-session")
-    if (stored) {
-      const data: SessionData = JSON.parse(stored)
-      setSessionData(data)
-      setPinnedAgenda(data.agenda)
-      setTimerMinutes(data.duration)
-      setSessionStatus("active")
-      setSessionStartTime(new Date())
-
-      const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      setMessages([
-        { id: "1", type: "command-echo", author: "system", content: `/session "${data.name}"`, timestamp: now },
-        { id: "2", type: "system", author: "system", content: `Agenda locked: ${data.agenda}`, timestamp: now },
-        {
-          id: "3",
-          type: "system",
-          author: "system",
-          content: `Timer started: ${data.duration}m focus session`,
-          timestamp: now,
-        },
-      ])
-    } else {
+    if (!stored) {
       router.push("/setup")
+      return
     }
-  }, [router])
+
+    const storedDisplayName = sessionStorage.getItem("z3ro-display-name") || "You"
+    setDisplayName(storedDisplayName)
+
+    let cleanupMessages = () => {}
+    let cleanupSession = () => {}
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const local: SessionData = JSON.parse(stored)
+        const session: DbSession = await getSessionById(local.id)
+        if (cancelled) return
+
+        setSessionData({
+          id: session.id,
+          code: session.code,
+          name: session.name,
+          agenda: session.agenda,
+          duration: session.duration_minutes,
+          creator: session.created_by,
+          createdAt: session.created_at,
+        })
+
+        setPinnedAgenda(session.agenda)
+        setTimerMinutes(session.duration_minutes)
+        setTimerEndsAtState(session.timer_ends_at)
+        setSessionStatus("active")
+        setSessionStartTime(new Date(session.created_at))
+
+        await joinSession({ sessionId: session.id, displayName: storedDisplayName })
+
+        const dbMessages = await listMessages(session.id)
+        if (cancelled) return
+
+        seenMessageIdsRef.current = new Set(dbMessages.map((m) => m.id))
+        setMessages(dbMessages.map(dbToUiMessage))
+
+        cleanupMessages = subscribeToMessages(session.id, addDbMessage)
+        cleanupSession = subscribeToSession(session.id, (next) => {
+          setPinnedAgenda(next.agenda)
+          setTimerEndsAtState(next.timer_ends_at)
+        })
+      } catch (e) {
+        console.error(e)
+        router.push("/setup")
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      cleanupMessages()
+      cleanupSession()
+    }
+  }, [router, addDbMessage, dbToUiMessage])
+
+  useEffect(() => {
+    setMessageCount(messages.filter((m) => m.type === "user").length)
+  }, [messages])
+
+  // Update time remaining display
+  useEffect(() => {
+    if (!timerEndsAt) {
+      setTimeRemaining("")
+      return
+    }
+
+    const updateTime = () => {
+      const ms = new Date(timerEndsAt).getTime() - Date.now()
+      if (ms <= 0) {
+        setTimeRemaining("00:00")
+        return
+      }
+      
+      const totalSeconds = Math.floor(ms / 1000)
+      const minutes = Math.floor(totalSeconds / 60)
+      const seconds = totalSeconds % 60
+      setTimeRemaining(`${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`)
+    }
+
+    updateTime()
+    const interval = setInterval(updateTime, 1000)
+    return () => clearInterval(interval)
+  }, [timerEndsAt])
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -129,16 +228,32 @@ export default function SessionPage() {
     setMessages((prev) => [...prev, msg])
   }, [])
 
-  const handleSendMessage = (content: string) => {
-    const msg: Message = {
-      id: Date.now().toString(),
+  const handleSendMessage = async (content: string) => {
+    if (!sessionData) return
+
+    const id = crypto.randomUUID()
+    const optimistic: Message = {
+      id,
       type: "user",
-      author: "you",
+      author: displayName,
       content,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     }
-    setMessages((prev) => [...prev, msg])
-    setMessageCount((prev) => prev + 1)
+
+    seenMessageIdsRef.current.add(id)
+    setMessages((prev) => [...prev, optimistic])
+
+    try {
+      await insertMessage({
+        id,
+        sessionId: sessionData.id,
+        kind: "user",
+        content,
+        authorName: displayName,
+      })
+    } catch {
+      addSystemMessage("Failed to send message. Check Supabase config.")
+    }
   }
 
   const handleSessionEnd = useCallback(() => {
@@ -167,12 +282,35 @@ export default function SessionPage() {
   }, [widgets, sessionData, router])
 
   const handleExecuteCommand = useCallback(
-    (command: string, args?: string) => {
+    async (command: string, args?: string) => {
+      if (!sessionData) return
+
       const fullCommand = `${command}${args ? ` ${args}` : ""}`
       setLastCommand(fullCommand)
 
-      // Echo command immediately
-      addSystemMessage(fullCommand, "command-echo")
+      // Echo command immediately (and persist so others see it)
+      const echoId = crypto.randomUUID()
+      const echo: Message = {
+        id: echoId,
+        type: "command-echo",
+        author: "system",
+        content: fullCommand,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      }
+      seenMessageIdsRef.current.add(echoId)
+      setMessages((prev) => [...prev, echo])
+
+      try {
+        await insertMessage({
+          id: echoId,
+          sessionId: sessionData.id,
+          kind: "command-echo",
+          content: fullCommand,
+          authorName: "system",
+        })
+      } catch {
+        // Non-fatal
+      }
 
       let newWidget: Widget | null = null
 
@@ -183,16 +321,39 @@ export default function SessionPage() {
 
         case "/timer": {
           const minutes = args ? Number.parseInt(args) : 25
+          const endsAtIso = new Date(Date.now() + minutes * 60_000).toISOString()
           setTimerMinutes(minutes)
+          setTimerEndsAtState(endsAtIso)
           setSessionStatus("active")
-          addSystemMessage(`Timer set: ${minutes}m`)
+
+          try {
+            await setTimerEndsAt(sessionData.id, endsAtIso)
+            await insertMessage({
+              sessionId: sessionData.id,
+              kind: "system",
+              content: `Timer set: ${minutes}m`,
+              authorName: "system",
+            })
+          } catch {
+            addSystemMessage("Unable to set timer (permission or network error).")
+          }
           break
         }
 
         case "/agenda":
           if (args) {
             setPinnedAgenda(args)
-            addSystemMessage(`Agenda updated: "${args}"`)
+            try {
+              await setAgenda(sessionData.id, args)
+              await insertMessage({
+                sessionId: sessionData.id,
+                kind: "system",
+                content: `Agenda updated: "${args}"`,
+                authorName: "system",
+              })
+            } catch {
+              addSystemMessage("Unable to update agenda (permission or network error).")
+            }
           }
           break
 
@@ -357,7 +518,50 @@ export default function SessionPage() {
         setExpandedWidgets((prev) => new Set([...prev, newWidget.id]))
       }
     },
-    [handleSessionEnd, widgets, addSystemMessage],
+    [handleSessionEnd, widgets, addSystemMessage, sessionData, displayName],
+  )
+
+  const handleAgendaChange = useCallback(
+    async (agenda: string) => {
+      if (!sessionData) return
+      setPinnedAgenda(agenda)
+      try {
+        await setAgenda(sessionData.id, agenda)
+        await insertMessage({
+          sessionId: sessionData.id,
+          kind: "system",
+          content: `Agenda updated: "${agenda}"`,
+          authorName: "system",
+        })
+      } catch {
+        addSystemMessage("Unable to update agenda (permission or network error).")
+      }
+    },
+    [sessionData, addSystemMessage],
+  )
+
+  const handleTimerSetMinutes = useCallback(
+    async (minutes: number) => {
+      if (!sessionData) return
+
+      const endsAtIso = new Date(Date.now() + minutes * 60_000).toISOString()
+      setTimerMinutes(minutes)
+      setTimerEndsAtState(endsAtIso)
+      setSessionStatus("active")
+
+      try {
+        await setTimerEndsAt(sessionData.id, endsAtIso)
+        await insertMessage({
+          sessionId: sessionData.id,
+          kind: "system",
+          content: `Timer set: ${minutes}m`,
+          authorName: "system",
+        })
+      } catch {
+        addSystemMessage("Unable to set timer (permission or network error).")
+      }
+    },
+    [sessionData, addSystemMessage],
   )
 
   const handleDistractionChange = useCallback((level: number) => {
@@ -417,8 +621,10 @@ export default function SessionPage() {
 
       <AppHeader
         timerMinutes={timerMinutes}
+        timerEndsAt={timerEndsAt}
         pinnedAgenda={pinnedAgenda}
-        onAgendaChange={setPinnedAgenda}
+        onAgendaChange={handleAgendaChange}
+        onTimerSetMinutes={handleTimerSetMinutes}
         distractionLevel={distractionLevel}
         onDistractionChange={handleDistractionChange}
         lockState={lockState}
