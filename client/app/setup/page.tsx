@@ -10,10 +10,12 @@ import { createSession } from "@/lib/supabase/chat"
 
 export default function SetupPage() {
   const router = useRouter()
+  const [displayName, setDisplayName] = useState("")
   const [sessionName, setSessionName] = useState("")
   const [agenda, setAgenda] = useState("")
   const [duration, setDuration] = useState(45)
   const [isStarting, setIsStarting] = useState(false)
+  const displayNameInputRef = useRef<HTMLInputElement>(null)
   const agendaInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -25,7 +27,7 @@ export default function SetupPage() {
       if (proposedDuration) setDuration(proposedDuration)
       sessionStorage.removeItem("z3ro-next-seed")
     }
-    agendaInputRef.current?.focus()
+    displayNameInputRef.current?.focus()
   }, [])
 
   const handleAgendaInput = (value: string) => {
@@ -38,15 +40,17 @@ export default function SetupPage() {
 
   const handleStart = async () => {
     if (!agenda.trim()) return
+    if (!displayName.trim()) return
     if (isStarting) return
 
     setIsStarting(true)
     try {
+      const creatorName = displayName.trim()
       const session = await createSession({
         name: sessionName.trim() || `Session ${new Date().toLocaleDateString()}`,
         agenda: agenda.trim(),
         durationMinutes: duration,
-        hostDisplayName: "You",
+        hostDisplayName: creatorName,
       })
 
       sessionStorage.setItem(
@@ -58,10 +62,12 @@ export default function SetupPage() {
           agenda: session.agenda,
           duration: session.duration_minutes,
           creator: "you",
+          creatorName: creatorName,
           createdAt: session.created_at,
         }),
       )
-      sessionStorage.setItem("z3ro-display-name", "You")
+      sessionStorage.setItem("z3ro-display-name", creatorName)
+      sessionStorage.setItem("z3ro-is-creator", "true")
       router.push("/session")
     } catch (error) {
       console.error("Failed to create session:", error)
@@ -78,7 +84,7 @@ export default function SetupPage() {
     }
   }
 
-  const canStart = agenda.trim().length > 0
+  const canStart = agenda.trim().length > 0 && displayName.trim().length > 0
 
   return (
     <div className="min-h-screen flex flex-col grid-bg" style={{ backgroundColor: "#0a0a0b" }}>
@@ -117,6 +123,20 @@ export default function SetupPage() {
 
           {/* Form */}
           <div className="space-y-6">
+            {/* Display name */}
+            <div className="space-y-2">
+              <label className="text-xs font-mono uppercase tracking-wider text-[#52525b]">
+                Your Name <span className="text-[#ef4444]">*</span>
+              </label>
+              <Input
+                ref={displayNameInputRef}
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="enter your name"
+                className="h-11 bg-[#111113] border-[#27272a] font-mono text-sm text-[#fafafa] placeholder:text-[#3f3f46] focus-visible:border-[#3b82f6] focus-visible:ring-0 rounded-lg"
+              />
+            </div>
+
             {/* Session name */}
             <div className="space-y-2">
               <label className="text-xs font-mono uppercase tracking-wider text-[#52525b]">
@@ -211,7 +231,7 @@ export default function SetupPage() {
 
       {/* Footer */}
       <footer className="h-8 flex items-center justify-center border-t border-[#1a1a1f]">
-        <span className="font-mono text-xs text-[#3f3f46]">Tab: Name → Duration → Agenda → Start</span>
+        <span className="font-mono text-xs text-[#3f3f46]">Tab: Name → Session → Agenda → Duration → Start</span>
       </footer>
     </div>
   )

@@ -38,7 +38,7 @@ export interface Decision {
   timestamp: string
 }
 
-export interface Blocker {
+export interface Issue {
   id: string
   text: string
   resolved: boolean
@@ -56,20 +56,21 @@ export interface ProgressResponse {
 export interface NextSessionData {
   goal: string
   duration: number
-  carryOverBlockers: Blocker[]
+  carryOverIssues: Issue[]
 }
 
 export interface Widget {
   id: string
-  type: "timer" | "metric" | "status" | "tasks" | "summary" | "decision" | "blocker" | "code" | "progress" | "next"
+  type: "timer" | "metric" | "status" | "tasks" | "summary" | "decision" | "issues" | "code" | "progress" | "next"
   title: string
   value: string
+  createdBy?: string
   subtitle?: string
   status?: "active" | "idle" | "warning"
   details?: string
   tasks?: Task[]
   decisions?: Decision[]
-  blockers?: Blocker[]
+  issues?: Issue[]
   codeContent?: string
   codeLocked?: boolean
   progressResponses?: ProgressResponse[]
@@ -78,7 +79,7 @@ export interface Widget {
     completedItems: string[]
     incompleteItems: string[]
     decisions: string[]
-    blockers: string[]
+    issues: string[]
     recommendations: string[]
   }
 }
@@ -88,9 +89,10 @@ interface WidgetZoneProps {
   expandedWidgets: Set<string>
   onToggleWidget: (id: string) => void
   onUpdateWidget: (id: string, updates: Partial<Widget>) => void
+  onAddTask?: (widgetId: string, text: string) => Promise<Task>
 }
 
-export function WidgetZone({ widgets, expandedWidgets, onToggleWidget, onUpdateWidget }: WidgetZoneProps) {
+export function WidgetZone({ widgets, expandedWidgets, onToggleWidget, onUpdateWidget, onAddTask }: WidgetZoneProps) {
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const [selectedWidgetForMobile, setSelectedWidgetForMobile] = useState<string | null>(null)
 
@@ -108,7 +110,7 @@ export function WidgetZone({ widgets, expandedWidgets, onToggleWidget, onUpdateW
         return <CheckSquare className="h-4 w-4" style={{ color: "#10B981" }} />
       case "decision":
         return <BookOpen className="h-4 w-4" style={{ color: "#3B82F6" }} />
-      case "blocker":
+      case "issues":
         return <AlertTriangle className="h-4 w-4" style={{ color: "#F59E0B" }} />
       case "code":
         return <Code className="h-4 w-4" style={{ color: "#3B82F6" }} />
@@ -146,11 +148,11 @@ export function WidgetZone({ widgets, expandedWidgets, onToggleWidget, onUpdateW
       case "summary":
         return <SummaryContent widget={widget} />
       case "tasks":
-        return <TaskBoardContent widget={widget} onUpdateWidget={onUpdateWidget} />
+        return <TaskBoardContent widget={widget} onUpdateWidget={onUpdateWidget} onAddTask={onAddTask} />
       case "decision":
         return <DecisionLogContent widget={widget} />
-      case "blocker":
-        return <BlockerContent widget={widget} onUpdateWidget={onUpdateWidget} />
+      case "issues":
+        return <IssuesContent widget={widget} onUpdateWidget={onUpdateWidget} />
       case "code":
         return <CodeFocusContent widget={widget} onUpdateWidget={onUpdateWidget} />
       case "progress":
@@ -182,20 +184,17 @@ export function WidgetZone({ widgets, expandedWidgets, onToggleWidget, onUpdateW
     <>
       {/* Desktop/Tablet: Sidebar layout */}
       <div
-        className="hidden md:flex w-16 md:w-16 lg:w-80 flex-col gap-2 overflow-y-auto p-2 border-r"
-        style={{ backgroundColor: "#0D0D0D", borderColor: "#1A1A1A" }}
+        className="flex w-72 flex-col gap-2.5 overflow-y-auto p-3 border-r border-[#1a1a1f] bg-[#0a0a0b] custom-scrollbar"
         role="region"
         aria-label="Widget zone"
       >
         {widgets.length === 0 && (
-          <div className="hidden lg:flex flex-col items-center justify-center py-8 px-4 text-center">
-            <CheckSquare className="h-6 w-6 mb-2" style={{ color: "#262626" }} />
-            <p className="text-xs font-mono" style={{ color: "#52525B" }}>
-              No active widgets
-            </p>
-            <p className="text-xs font-mono mt-1" style={{ color: "#3D3D3D" }}>
-              Type / for commands
-            </p>
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+            <div className="h-12 w-12 rounded-xl bg-[#111113] border border-[#1a1a1f] flex items-center justify-center mb-4">
+              <CheckSquare className="h-6 w-6 text-[#52525b]" />
+            </div>
+            <p className="font-mono text-sm text-[#71717a] font-medium">No widgets yet</p>
+            <p className="font-mono text-xs text-[#3f3f46] mt-2">Type <span className="text-[#3b82f6]">/tasks</span>, <span className="text-[#3b82f6]">/decision</span>, or <span className="text-[#3b82f6]">/code</span> to get started</p>
           </div>
         )}
 
@@ -204,31 +203,34 @@ export function WidgetZone({ widgets, expandedWidgets, onToggleWidget, onUpdateW
           return (
             <Collapsible key={widget.id} open={isExpanded} onOpenChange={() => onToggleWidget(widget.id)}>
               <div
-                className={`rounded transition-all duration-200 ease-out ${isExpanded ? "widget-active-ring" : ""}`}
-                style={{
-                  backgroundColor: isExpanded ? "#1A1A1A" : "transparent",
-                }}
+                className={`rounded-lg transition-all duration-200 ease-out border ${
+                  isExpanded 
+                    ? "bg-[#111113] border-[#27272a] shadow-lg" 
+                    : "bg-transparent border-transparent hover:bg-[#0f0f10] hover:border-[#1a1a1f]"
+                }`}
                 role="article"
                 aria-label={`${widget.title} widget`}
               >
                 <CollapsibleTrigger
-                  className="w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3B82F6] rounded"
+                  className="w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3B82F6] rounded-lg"
                   aria-expanded={isExpanded}
                   aria-label={`${isExpanded ? "Collapse" : "Expand"} ${widget.title}`}
                 >
-                  <div className="flex h-10 items-center gap-3 px-3 md:flex-col md:py-2 lg:flex-row lg:py-0">
-                    {getIcon(widget.type)}
+                  <div className="flex h-12 items-center gap-3 px-4 md:flex-col md:py-2 lg:flex-row lg:py-0">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-[#0a0a0b]/50">
+                      {getIcon(widget.type)}
+                    </div>
                     <span
                       className="text-sm font-medium flex-1 text-left truncate md:hidden lg:block"
-                      style={{ color: "#FFFFFF" }}
+                      style={{ color: "#fafafa" }}
                     >
                       {widget.title}
                     </span>
                     <Badge
                       variant="secondary"
-                      className="h-5 px-2 text-xs border-0 md:hidden lg:flex font-mono"
+                      className="h-6 px-2.5 text-xs border-0 md:hidden lg:flex font-mono"
                       style={{
-                        backgroundColor: "transparent",
+                        backgroundColor: getStatusColor(widget.status) + "20",
                         color: getStatusColor(widget.status),
                       }}
                     >
@@ -237,15 +239,15 @@ export function WidgetZone({ widgets, expandedWidgets, onToggleWidget, onUpdateW
                     <ChevronDown
                       className="h-4 w-4 transition-transform duration-200 ease-out md:hidden lg:block"
                       style={{
-                        color: "#52525B",
+                        color: "#71717a",
                         transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
                       }}
                     />
                   </div>
                 </CollapsibleTrigger>
 
-                <CollapsibleContent className="transition-all duration-200 ease-out data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down hidden lg:block">
-                  <div className="px-3 pb-3 pt-1">{renderWidgetContent(widget)}</div>
+                <CollapsibleContent className="transition-all duration-200 ease-out data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down hidden lg:block overflow-hidden">
+                  <div className="px-4 pb-4 pt-2">{renderWidgetContent(widget)}</div>
                 </CollapsibleContent>
 
                 {/* Tablet overlay */}
@@ -336,20 +338,34 @@ export function WidgetZone({ widgets, expandedWidgets, onToggleWidget, onUpdateW
 function TaskBoardContent({
   widget,
   onUpdateWidget,
+  onAddTask,
 }: {
   widget: Widget
   onUpdateWidget: (id: string, updates: Partial<Widget>) => void
+  onAddTask?: (widgetId: string, text: string) => Promise<Task>
 }) {
   const [newTaskText, setNewTaskText] = useState("")
   const tasks = widget.tasks || []
 
-  const addTask = () => {
+  const addTask = async () => {
     if (!newTaskText.trim()) return
 
-    const newTask: Task = {
-      id: Date.now().toString(),
-      text: newTaskText.trim(),
-      completed: false,
+    let newTask: Task
+    if (onAddTask) {
+      try {
+        // Get real UUID from database
+        newTask = await onAddTask(widget.id, newTaskText.trim())
+      } catch (error) {
+        console.error('Failed to add task:', error)
+        return
+      }
+    } else {
+      // Fallback to temporary ID (shouldn't happen)
+      newTask = {
+        id: `temp-${Date.now()}`,
+        text: newTaskText.trim(),
+        completed: false,
+      }
     }
 
     const updatedTasks = [...tasks, newTask]
@@ -498,22 +514,22 @@ function DecisionLogContent({ widget }: { widget: Widget }) {
   )
 }
 
-// Blocker Content
-function BlockerContent({
+// Issues Content
+function IssuesContent({
   widget,
   onUpdateWidget,
 }: {
   widget: Widget
   onUpdateWidget: (id: string, updates: Partial<Widget>) => void
 }) {
-  const blockers = widget.blockers || []
+  const issues = widget.issues || []
 
-  const toggleBlocker = (blockerId: string) => {
-    const updatedBlockers = blockers.map((b) => (b.id === blockerId ? { ...b, resolved: !b.resolved } : b))
-    const unresolvedCount = updatedBlockers.filter((b) => !b.resolved).length
+  const toggleIssue = (issueId: string) => {
+    const updatedIssues = issues.map((b) => (b.id === issueId ? { ...b, resolved: !b.resolved } : b))
+    const unresolvedCount = updatedIssues.filter((b) => !b.resolved).length
 
     onUpdateWidget(widget.id, {
-      blockers: updatedBlockers,
+      issues: updatedIssues,
       value: `${unresolvedCount} unresolved`,
       status: unresolvedCount > 0 ? "warning" : "active",
     })
@@ -525,21 +541,21 @@ function BlockerContent({
         {widget.value}
       </div>
 
-      {blockers.length === 0 ? (
+      {issues.length === 0 ? (
         <p className="text-sm font-mono" style={{ color: "#52525B" }}>
-          No blockers flagged
+          No issues flagged
         </p>
       ) : (
         <div className="space-y-2">
-          {blockers.map((blocker) => (
-            <div key={blocker.id} className="flex items-start gap-2 p-2 rounded" style={{ backgroundColor: "#0D0D0D" }}>
+          {issues.map((issue) => (
+            <div key={issue.id} className="flex items-start gap-2 p-2 rounded" style={{ backgroundColor: "#0D0D0D" }}>
               <Button
-                onClick={() => toggleBlocker(blocker.id)}
+                onClick={() => toggleIssue(issue.id)}
                 size="icon"
                 variant="ghost"
                 className="h-5 w-5 shrink-0 mt-0.5"
               >
-                {blocker.resolved ? (
+                {issue.resolved ? (
                   <CheckSquare className="h-4 w-4" style={{ color: "#10B981" }} />
                 ) : (
                   <AlertTriangle className="h-4 w-4" style={{ color: "#F59E0B" }} />
@@ -549,14 +565,14 @@ function BlockerContent({
                 <p
                   className="text-sm"
                   style={{
-                    color: blocker.resolved ? "#52525B" : "#FFFFFF",
-                    textDecoration: blocker.resolved ? "line-through" : "none",
+                    color: issue.resolved ? "#52525B" : "#FFFFFF",
+                    textDecoration: issue.resolved ? "line-through" : "none",
                   }}
                 >
-                  {blocker.text}
+                  {issue.text}
                 </p>
                 <span className="text-xs font-mono" style={{ color: "#3D3D3D" }}>
-                  {blocker.timestamp}
+                  {issue.timestamp}
                 </span>
               </div>
             </div>
@@ -722,7 +738,7 @@ function NextSessionContent({
   widget: Widget
   onUpdateWidget: (id: string, updates: Partial<Widget>) => void
 }) {
-  const nextSession = widget.nextSession || { goal: "", duration: 45, carryOverBlockers: [] }
+  const nextSession = widget.nextSession || { goal: "", duration: 45, carryOverIssues: [] }
 
   const setGoal = (goal: string) => {
     onUpdateWidget(widget.id, {
@@ -736,12 +752,12 @@ function NextSessionContent({
     })
   }
 
-  const toggleBlocker = (blockerId: string) => {
-    const updatedBlockers = nextSession.carryOverBlockers.map((b) =>
-      b.id === blockerId ? { ...b, selected: !b.selected } : b,
+  const toggleIssue = (issueId: string) => {
+    const updatedIssues = nextSession.carryOverIssues.map((b) =>
+      b.id === issueId ? { ...b, selected: !b.selected } : b,
     )
     onUpdateWidget(widget.id, {
-      nextSession: { ...nextSession, carryOverBlockers: updatedBlockers },
+      nextSession: { ...nextSession, carryOverIssues: updatedIssues },
     })
   }
 
@@ -784,25 +800,25 @@ function NextSessionContent({
         </div>
       </div>
 
-      {nextSession.carryOverBlockers.length > 0 && (
+      {nextSession.carryOverIssues.length > 0 && (
         <div className="space-y-2">
           <label className="text-xs font-mono uppercase" style={{ color: "#52525B" }}>
-            Carry Over Blockers
+            Carry Over Issues
           </label>
           <div className="space-y-1">
-            {nextSession.carryOverBlockers.map((blocker) => (
+            {nextSession.carryOverIssues.map((issue) => (
               <div
-                key={blocker.id}
+                key={issue.id}
                 className="flex items-center gap-2 p-2 rounded"
                 style={{ backgroundColor: "#0D0D0D" }}
               >
                 <Checkbox
-                  checked={blocker.selected}
-                  onCheckedChange={() => toggleBlocker(blocker.id)}
+                  checked={issue.selected}
+                  onCheckedChange={() => toggleIssue(issue.id)}
                   className="border-[#52525B] data-[state=checked]:bg-[#3B82F6] data-[state=checked]:border-[#3B82F6]"
                 />
                 <span className="text-sm" style={{ color: "#FFFFFF" }}>
-                  {blocker.text}
+                  {issue.text}
                 </span>
               </div>
             ))}
@@ -834,8 +850,8 @@ ${summary.incompleteItems.map((item) => `- [ ] ${item}`).join("\n") || "- None"}
 ## Decisions
 ${summary.decisions.map((item) => `- ${item}`).join("\n") || "- None"}
 
-## Blockers
-${summary.blockers.map((item) => `- ${item}`).join("\n") || "- None"}
+## Issues
+${summary.issues.map((item) => `- ${item}`).join("\n") || "- None"}
 
 ## Recommendations
 ${summary.recommendations.map((item) => `- ${item}`).join("\n")}
@@ -903,14 +919,14 @@ ${summary.recommendations.map((item) => `- ${item}`).join("\n")}
         </div>
       )}
 
-      {/* Blockers */}
-      {summary.blockers.length > 0 && (
+      {/* Issues */}
+      {summary.issues.length > 0 && (
         <div>
           <h3 className="text-xs font-mono uppercase mb-2" style={{ color: "#EF4444" }}>
-            Blockers
+            Issues
           </h3>
           <ul className="space-y-1">
-            {summary.blockers.map((item, i) => (
+            {summary.issues.map((item, i) => (
               <li key={i} className="text-sm" style={{ color: "#A1A1AA" }}>
                 {item}
               </li>

@@ -68,11 +68,15 @@ export default function JoinPage() {
 
   const handleJoin = async () => {
     if (!preview) return
+    if (!displayName.trim()) {
+      alert("Please enter your name")
+      return
+    }
     if (isJoining) return
 
     setIsJoining(true)
     try {
-      const name = displayName.trim() || "Guest"
+      const name = displayName.trim()
       await joinSession({ sessionId: preview.id, displayName: name })
 
       sessionStorage.setItem(
@@ -88,6 +92,7 @@ export default function JoinPage() {
         }),
       )
       sessionStorage.setItem("z3ro-display-name", name)
+      sessionStorage.setItem("z3ro-is-creator", "false")
       router.push("/session")
     } finally {
       setIsJoining(false)
@@ -237,7 +242,7 @@ export default function JoinPage() {
                   onChange={(e) => setDisplayName(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Guest"
-                  className="h-10 bg-[#0D0D0D] border-[#262626] font-mono text-sm placeholder:text-[#3D3D3D] focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                  className="h-12 bg-[#0D0D0D] border-[#262626] font-mono text-base placeholder:text-[#3D3D3D] focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
                   style={{ color: "#FFFFFF" }}
                 />
               </div>

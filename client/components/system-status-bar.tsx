@@ -1,6 +1,7 @@
 "use client"
 
-import { Terminal, Wifi } from "lucide-react"
+import { Terminal, Wifi, Copy, Check } from "lucide-react"
+import { useState } from "react"
 import type { LockState, SessionStatus } from "@/components/app-header"
 
 interface SystemStatusBarProps {
@@ -8,9 +9,20 @@ interface SystemStatusBarProps {
   timeRemaining: string
   lastCommand: string
   lockState: LockState
+  sessionId?: string
 }
 
-export function SystemStatusBar({ sessionStatus, timeRemaining, lastCommand, lockState }: SystemStatusBarProps) {
+export function SystemStatusBar({ sessionStatus, timeRemaining, lastCommand, lockState, sessionId }: SystemStatusBarProps) {
+  const [copied, setCopied] = useState(false)
+
+  const copySessionId = () => {
+    if (sessionId) {
+      navigator.clipboard.writeText(sessionId)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
   const getStatusConfig = () => {
     switch (sessionStatus) {
       case "active":
@@ -26,8 +38,6 @@ export function SystemStatusBar({ sessionStatus, timeRemaining, lastCommand, loc
 
   const getLockConfig = () => {
     switch (lockState) {
-      case "hard":
-        return { text: "HARD_LOCK", color: "#ef4444" }
       case "soft":
         return { text: "SOFT_LOCK", color: "#f59e0b" }
       default:
@@ -62,6 +72,24 @@ export function SystemStatusBar({ sessionStatus, timeRemaining, lastCommand, loc
 
         {/* Time remaining */}
         {timeRemaining && <span className="text-[#a1a1aa]">T-{timeRemaining}</span>}
+
+        {/* Session ID with copy button */}
+        {sessionId && (
+          <button
+            onClick={copySessionId}
+            className="flex items-center gap-1.5 hover:text-[#3b82f6] transition-colors group"
+            title="Copy Session ID for testing"
+          >
+            {copied ? (
+              <Check className="h-3 w-3 text-[#10b981]" />
+            ) : (
+              <Copy className="h-3 w-3 text-[#52525b] group-hover:text-[#3b82f6]" />
+            )}
+            <span className="text-[#52525b] text-xs group-hover:text-[#3b82f6]">
+              {copied ? "Copied!" : "Copy ID"}
+            </span>
+          </button>
+        )}
 
         {/* Lock status */}
         {lock && (

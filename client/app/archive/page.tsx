@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { deleteSessionOnly } from "@/lib/supabase/chat"
 
 interface ArchivedSession {
   session: {
@@ -29,7 +30,7 @@ interface ArchivedSession {
   completedTasks: string[]
   incompleteTasks: string[]
   decisions: string[]
-  blockers: string[]
+  issues: string[]
   endedAt: string
   archivedAt: string
 }
@@ -43,7 +44,12 @@ export default function ArchivePage() {
   useEffect(() => {
     const stored = localStorage.getItem("z3ro-archive")
     if (stored) {
-      setArchive(JSON.parse(stored))
+      // Migrate old sessions with 'blockers' to 'issues'
+      const parsedArchive = JSON.parse(stored).map((session: any) => ({
+        ...session,
+        issues: session.issues || session.blockers || [],
+      }))
+      setArchive(parsedArchive)
     }
   }, [])
 
@@ -56,12 +62,21 @@ export default function ArchivePage() {
     )
   })
 
-  const deleteSession = (sessionId: string) => {
+  const deleteSession = async (sessionId: string) => {
+    // Remove from local archive view
     const updatedArchive = archive.filter((item) => item.session.id !== sessionId)
     setArchive(updatedArchive)
     localStorage.setItem("z3ro-archive", JSON.stringify(updatedArchive))
     if (selectedSession?.session.id === sessionId) {
       setSelectedSession(null)
+    }
+    
+    // Optionally delete from database (messages/widgets preserved)
+    try {
+      await deleteSessionOnly(sessionId)
+    } catch (err) {
+      console.warn("Archive cleanup: session already deleted or no DB access", err)
+      // Don't error - user can still remove from local archive
     }
   }
 
@@ -203,6 +218,7 @@ export default function ArchivePage() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
+                    title="Remove from archive view (session data persists in database)"
                   >
                     <Trash2 className="h-4 w-4" style={{ color: "#EF4444" }} />
                   </Button>
@@ -241,10 +257,10 @@ export default function ArchivePage() {
                   </div>
                   <div className="p-3 rounded" style={{ backgroundColor: "#1A1A1A" }}>
                     <div className="font-mono text-xl font-bold" style={{ color: "#EF4444" }}>
-                      {selectedSession.blockers.length}
+                      {(selectedSession.issues || []).length}
                     </div>
                     <div className="font-mono text-xs" style={{ color: "#52525B" }}>
-                      Blockers
+                      Issues
                     </div>
                   </div>
                 </div>
@@ -314,24 +330,24 @@ export default function ArchivePage() {
                   </div>
                 )}
 
-                {/* Blockers */}
-                {selectedSession.blockers.length > 0 && (
+                {/* Issues */}
+                {(selectedSession.issues || []).length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4" style={{ color: "#EF4444" }} />
                       <h2 className="font-mono text-xs uppercase" style={{ color: "#EF4444" }}>
-                        Blockers
+                        Issues
                       </h2>
                     </div>
                     <div className="space-y-1">
-                      {selectedSession.blockers.map((blocker, i) => (
+                      {(selectedSession.issues || []).map((issue, i) => (
                         <div
                           key={i}
                           className="p-2 rounded border-l-2"
                           style={{ backgroundColor: "#1A1A1A", borderColor: "#EF4444" }}
                         >
                           <span className="text-sm" style={{ color: "#A1A1AA" }}>
-                            {blocker}
+                            {issue}
                           </span>
                         </div>
                       ))}

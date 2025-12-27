@@ -11,7 +11,17 @@ export async function createSession(input: {
   const supabase = getSupabaseBrowserClient()
   const user = await ensureSignedIn()
 
-  const endsAtIso = new Date(Date.now() + input.durationMinutes * 60_000).toISOString()
+  // Validate duration
+  const validMinutes = Number.isFinite(input.durationMinutes) && input.durationMinutes > 0 && input.durationMinutes <= 180 
+    ? input.durationMinutes 
+    : 25
+
+  const ms = Date.now() + validMinutes * 60_000
+  if (!Number.isFinite(ms)) {
+    throw new Error("Invalid session duration")
+  }
+  
+  const endsAtIso = new Date(ms).toISOString()
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const code = generateSessionCode(6)
@@ -21,7 +31,7 @@ export async function createSession(input: {
         code,
         name: input.name,
         agenda: input.agenda,
-        duration_minutes: input.durationMinutes,
+        duration_minutes: validMinutes,
         created_by: user.id,
         timer_ends_at: endsAtIso,
       })
@@ -240,3 +250,51 @@ export function subscribeToSession(sessionId: string, onUpdate: (session: DbSess
     supabase.removeChannel(channel)
   }
 }
+
+/**
+ * Controlled session deletion - only removes session metadata
+ * Related records (messages, widgets) are intentionally NOT deleted (cascade disabled)
+ * This preserves historical data while allowing session cleanup
+ */
+export async function deleteSessionOnly(sessionId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient()
+  await ensureSignedIn()
+
+  const { error } = await supabase
+    .from("sessions")
+    .delete()
+    .eq("id", sessionId)
+
+  if (error) {
+    console.error("[deleteSessionOnly] Failed:", error)
+    throw new Error(`Delete error: ${error.message || "Unknown error"}`)
+  }
+
+  console.log("[deleteSessionOnly] Session deleted (messages/widgets preserved):", sessionId)
+}
+
+/**
+ * Nuclear option - deletes session AND all related data (cascade delete)
+ * Use with caution - this is irreversible
+ */
+export async function deleteSessionWithCascade(sessionId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient()
+  await ensureSignedIn()
+
+  // First delete session members to avoid conflicts
+  await supabase.from("session_members").delete().eq("session_id", sessionId)
+
+  // Then delete session (cascade will handle messages, widgets, etc)
+  const { error } = await supabase
+    .from("sessions")
+    .delete()
+    .eq("id", sessionId)
+
+  if (error) {
+    console.error("[deleteSessionWithCascade] Failed:", error)
+    throw new Error(`Delete error: ${error.message || "Unknown error"}`)
+  }
+
+  console.log("[deleteSessionWithCascade] Session and all related data deleted:", sessionId)
+}
+
