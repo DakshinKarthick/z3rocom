@@ -307,3 +307,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE widgets.progress_prompts;
 ALTER PUBLICATION supabase_realtime ADD TABLE widgets.progress_responses;
 ALTER PUBLICATION supabase_realtime ADD TABLE widgets.next_session_seed;
 ALTER PUBLICATION supabase_realtime ADD TABLE widgets.next_seed_issues;
+
+-- Add distraction_level column to existing sessions table
+ALTER TABLE public.sessions 
+ADD COLUMN IF NOT EXISTS focus_level integer NOT NULL DEFAULT 100;

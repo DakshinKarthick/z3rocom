@@ -9,6 +9,7 @@ export interface DbSession {
   created_at: string
   created_by: string
   timer_ends_at: string | null
+  focus_level: number
 }
 
 export interface DbMessage {
