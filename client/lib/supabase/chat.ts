@@ -298,3 +298,70 @@ export async function deleteSessionWithCascade(sessionId: string): Promise<void>
   console.log("[deleteSessionWithCascade] Session and all related data deleted:", sessionId)
 }
 
+/**
+ * Update the focus_level for a session
+ * Uses RPC function to allow any session member to update (bypasses RLS)
+ * @param sessionId - UUID of the session
+ * @param focusLevel - Focus level (0-100, where 100 = fully focused)
+ */
+export async function updateSessionFocusLevel(sessionId: string, focusLevel: number): Promise<void> {
+  const supabase = getSupabaseBrowserClient()
+  await ensureSignedIn()
+
+  // Try RPC function first (allows any session member)
+  const { error: rpcError } = await supabase.rpc("update_session_focus_level", {
+    p_session_id: sessionId,
+    p_focus_level: focusLevel,
+  })
+
+  if (!rpcError) return
+
+  // Fallback to direct update (works for session creator)
+  const { error } = await supabase
+    .from("sessions")
+    .update({ focus_level: focusLevel })
+    .eq("id", sessionId)
+
+  if (error) {
+    console.error("[updateSessionFocusLevel] Failed:", error)
+    throw error
+  }
+}
+
+/**
+ * Analyze messages for focus level using the ML model API
+ * @param messages - Array of message contents (newest first)
+ * @returns Focus analysis result with focus_level (0-100)
+ */
+export async function analyzeMessagesFocus(messages: string[]): Promise<{
+  focus_level: number
+  probabilities: number[]
+  message_count: number
+  error?: string
+  fallback?: boolean
+}> {
+  try {
+    const response = await fetch("/api/focus", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Focus API returned ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("[analyzeMessagesFocus] Error:", error)
+    // Return default focused state on error
+    return {
+      focus_level: 100,
+      probabilities: [],
+      message_count: 0,
+      error: error instanceof Error ? error.message : "Unknown error",
+      fallback: true,
+    }
+  }
+}
+

@@ -27,7 +27,3 @@ yarn-error.log*
 next-env.d.ts
 
 # ML models (large/sensitive)
-*.pkl
-worker/.env
-__pycache__/
-*.pyc

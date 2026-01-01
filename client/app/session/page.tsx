@@ -18,6 +18,8 @@ import {
   setTimerEndsAt,
   subscribeToMessages,
   subscribeToSession,
+  analyzeMessagesFocus,
+  updateSessionFocusLevel,
 } from "@/lib/supabase/chat"
 import { 
   createWidget, 
@@ -661,6 +663,47 @@ export default function SessionPage() {
         content,
         authorName: displayName,
       })
+
+      // Analyze focus level after successful message send
+      // Get last 10 user messages (newest first) for analysis
+      const recentUserMessages = [...messages, optimistic]
+        .filter((m) => m.type === "user")
+        .slice(-10)
+        .reverse()
+        .map((m) => m.content)
+
+      if (recentUserMessages.length > 0) {
+        // Run analysis in background (don't block UI)
+        analyzeMessagesFocus(recentUserMessages)
+          .then(async (result) => {
+            console.log("[Focus] Analysis result:", result)
+            
+            // Check if we got a valid focus_level (even with fallback, it has a value)
+            if (typeof result.focus_level === "number") {
+              // Update local state immediately for responsive UI
+              // Convert focus_level (100=focused) to distraction (100=distracted)
+              const newDistractionLevel = 100 - result.focus_level
+              setDistractionLevel(newDistractionLevel)
+              console.log("[Focus] Updated distraction level:", newDistractionLevel, result.fallback ? "(fallback)" : "")
+              
+              // Only update database if it's not a fallback result
+              if (!result.fallback) {
+                try {
+                  await updateSessionFocusLevel(sessionData.id, result.focus_level)
+                  console.log("[Focus] Database updated successfully")
+                } catch (dbErr) {
+                  // RLS may block non-creators, but local update still works
+                  console.log("[Focus] Database update skipped (RLS):", dbErr)
+                }
+              }
+            } else {
+              console.log("[Focus] No valid focus_level in result")
+            }
+          })
+          .catch((err) => {
+            console.error("[Focus] Analysis error:", err)
+          })
+      }
     } catch (error) {
       console.error("Send message error:", error)
       addSystemMessage("Failed to send message. Check your connection.")
