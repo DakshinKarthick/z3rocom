@@ -11,6 +11,8 @@ Usage:
     python focus_worker.py              # Run once for all active sessions
     python focus_worker.py --loop       # Run continuously every 60s
     python focus_worker.py --session <uuid>  # Run for a specific session
+    python focus_worker.py --analyze "message text"  # Analyze single message (for Next.js integration)
+    python focus_worker.py --analyze-batch "msg1" "msg2" ...  # Analyze multiple messages and return weighted score
 """
 
 import os
@@ -18,23 +20,28 @@ import sys
 import pickle
 import time
 import argparse
+import json
 from pathlib import Path
 from datetime import datetime, timedelta
 
-import spacy
+# Load environment variables FIRST (before other imports that might need them)
 from dotenv import load_dotenv
-from supabase import create_client, Client
-
-# Load environment variables
 load_dotenv()
+
+# Check if running in analyze mode (don't load heavy deps until needed)
+_ANALYZE_MODE = "--analyze" in sys.argv or "--analyze-batch" in sys.argv
+
+# Only import supabase when needed (not for --analyze mode)
+Client = None
+create_client = None
 
 # Configuration
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-ALPHA = float(os.environ.get("ALPHA", 0.8))  # Decay factor
-MAX_MESSAGES = int(os.environ.get("MAX_MESSAGES", 10))
-FOCUS_FLOOR = int(os.environ.get("FOCUS_FLOOR", 20))
-FOCUS_CEILING = int(os.environ.get("FOCUS_CEILING", 95))
+ALPHA = float(os.environ.get("ALPHA", "0.8"))  # Decay factor
+MAX_MESSAGES = int(os.environ.get("MAX_MESSAGES", "10"))
+FOCUS_FLOOR = int(os.environ.get("FOCUS_FLOOR", "20"))
+FOCUS_CEILING = int(os.environ.get("FOCUS_CEILING", "95"))
 MODEL_PATH = Path(__file__).parent / "models" / "focus_model.pkl"
 
 # Global model and spaCy instance
@@ -42,7 +49,7 @@ _model = None
 _nlp = None
 
 
-def get_model():
+def get_model(quiet: bool = False):
     """Lazy-load the pickled classifier."""
     global _model
     if _model is None:
@@ -53,25 +60,28 @@ def get_model():
             )
         with open(MODEL_PATH, "rb") as f:
             _model = pickle.load(f)
-        print(f"[INFO] Loaded model from {MODEL_PATH}")
+        if not quiet:
+            print(f"[INFO] Loaded model from {MODEL_PATH}", file=sys.stderr)
     return _model
 
 
-def get_nlp():
+def get_nlp(quiet: bool = False):
     """Lazy-load spaCy model for preprocessing."""
     global _nlp
     if _nlp is None:
+        import spacy
         _nlp = spacy.load("en_core_web_sm")
-        print("[INFO] Loaded spaCy model en_core_web_sm")
+        if not quiet:
+            print("[INFO] Loaded spaCy model en_core_web_sm", file=sys.stderr)
     return _nlp
 
 
-def preprocess_text(text: str) -> str:
+def preprocess_text(text: str, quiet: bool = False) -> str:
     """
     Preprocess text using spaCy: lemmatize, lowercase, remove stopwords/punct.
     Must match the preprocessing used during training.
     """
-    nlp = get_nlp()
+    nlp = get_nlp(quiet)
     doc = nlp(str(text))
     tokens = [
         token.lemma_.lower()
@@ -109,8 +119,14 @@ def compute_weighted_focus(probabilities: list[float]) -> int:
     return focus
 
 
-def get_supabase_client() -> Client:
-    """Create Supabase client with service-role key."""
+def get_supabase_client():
+    """Create Supabase client with service-role key (lazy import)."""
+    global Client, create_client
+    if create_client is None:
+        from supabase import create_client as _create_client, Client as _Client
+        create_client = _create_client
+        Client = _Client
+    
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         raise ValueError(
             "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. "
@@ -281,6 +297,77 @@ def run_loop(interval_seconds: int = 60, verbose: bool = True) -> None:
         time.sleep(interval_seconds)
 
 
+# ============================================================================
+# Standalone Analysis Functions (for Next.js integration)
+# ============================================================================
+
+def analyze_single_message(text: str) -> dict:
+    """
+    Analyze a single message and return its focus probability.
+    
+    Args:
+        text: Message content to analyze.
+        
+    Returns:
+        Dictionary with focus_probability (0-1) where 1 = work-focused.
+    """
+    model = get_model(quiet=True)
+    preprocessed = preprocess_text(text, quiet=True)
+    
+    try:
+        proba = model.predict_proba([preprocessed])
+        work_prob = float(proba[0][1])  # Probability of class 1 (work-focused)
+    except AttributeError:
+        # Fallback if model doesn't have predict_proba
+        prediction = model.predict([preprocessed])[0]
+        work_prob = float(prediction)
+    
+    return {
+        "focus_probability": work_prob,
+        "preprocessed": preprocessed
+    }
+
+
+def analyze_messages_batch(messages: list[str]) -> dict:
+    """
+    Analyze multiple messages and return weighted focus score.
+    Messages should be in order from newest to oldest.
+    
+    Args:
+        messages: List of message contents (newest first).
+        
+    Returns:
+        Dictionary with focus_level (0-100), individual probabilities, etc.
+    """
+    if not messages:
+        return {
+            "focus_level": 100,
+            "probabilities": [],
+            "message_count": 0
+        }
+    
+    # Limit to MAX_MESSAGES
+    messages = messages[:MAX_MESSAGES]
+    
+    model = get_model(quiet=True)
+    preprocessed = [preprocess_text(msg, quiet=True) for msg in messages]
+    
+    try:
+        proba = model.predict_proba(preprocessed)
+        work_probs = [float(p[1]) for p in proba]  # P(work-focused) for each
+    except AttributeError:
+        predictions = model.predict(preprocessed)
+        work_probs = [float(p) for p in predictions]
+    
+    focus_level = compute_weighted_focus(work_probs)
+    
+    return {
+        "focus_level": focus_level,
+        "probabilities": work_probs,
+        "message_count": len(messages)
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Focus Level Worker")
     parser.add_argument(
@@ -304,10 +391,34 @@ def main():
         action="store_true",
         help="Suppress verbose output"
     )
+    parser.add_argument(
+        "--analyze",
+        type=str,
+        help="Analyze a single message and output JSON result"
+    )
+    parser.add_argument(
+        "--analyze-batch",
+        nargs="+",
+        metavar="MSG",
+        help="Analyze multiple messages (newest first) and output JSON with weighted focus score"
+    )
     
     args = parser.parse_args()
     verbose = not args.quiet
     
+    # Single message analysis mode (for Next.js integration)
+    if args.analyze:
+        result = analyze_single_message(args.analyze)
+        print(json.dumps(result))
+        return
+    
+    # Batch analysis mode (for Next.js integration)
+    if args.analyze_batch:
+        result = analyze_messages_batch(args.analyze_batch)
+        print(json.dumps(result))
+        return
+    
+    # Standard worker modes
     if args.loop:
         run_loop(interval_seconds=args.interval, verbose=verbose)
     else:
