@@ -1,0 +1,9 @@
+# Focus Level Worker Dependencies
+supabase>=2.0.0
+spacy>=3.5.0
+scikit-learn>=1.2.0
+pandas>=2.0.0
+python-dotenv>=1.0.0
+
+# Download spaCy model after install:
+# python -m spacy download en_core_web_sm

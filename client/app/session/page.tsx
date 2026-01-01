@@ -51,7 +51,7 @@ interface SessionData {
 export default function SessionPage() {
   const router = useRouter()
   const [lockState, setLockState] = useState<LockState>("none")
-  const [distractionLevel, setDistractionLevel] = useState(15)
+  const [distractionLevel, setDistractionLevel] = useState(0) // 0 = fully focused (100 - focus_level)
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("idle")
   const [lastCommand, setLastCommand] = useState("")
   const [timeRemaining, setTimeRemaining] = useState("")
@@ -160,6 +160,8 @@ export default function SessionPage() {
         setPinnedAgenda(session.agenda)
         setTimerMinutes(session.duration_minutes)
         setTimerEndsAtState(session.timer_ends_at)
+        // Convert focus_level (100=focused) to distraction (100=distracted)
+        setDistractionLevel(100 - (session.focus_level ?? 100))
         setSessionStatus("active")
         setSessionStartTime(new Date(session.created_at))
 
@@ -365,6 +367,10 @@ export default function SessionPage() {
             if (!cancelled) {
               setPinnedAgenda(next.agenda)
               setTimerEndsAtState(next.timer_ends_at)
+              if (next.focus_level !== undefined) {
+                // Convert focus_level (100=focused) to distraction (100=distracted)
+                setDistractionLevel(100 - next.focus_level)
+              }
             }
           })
           // Subscribe to widget changes - broadcast to all users
