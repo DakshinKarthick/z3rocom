@@ -300,7 +300,6 @@ export async function deleteSessionWithCascade(sessionId: string): Promise<void>
 
 /**
  * Update the focus_level for a session
- * Uses RPC function to allow any session member to update (bypasses RLS)
  * @param sessionId - UUID of the session
  * @param focusLevel - Focus level (0-100, where 100 = fully focused)
  */
@@ -308,18 +307,9 @@ export async function updateSessionFocusLevel(sessionId: string, focusLevel: num
   const supabase = getSupabaseBrowserClient()
   await ensureSignedIn()
 
-  // Try RPC function first (allows any session member)
-  const { error: rpcError } = await supabase.rpc("update_session_focus_level", {
-    p_session_id: sessionId,
-    p_focus_level: focusLevel,
-  })
-
-  if (!rpcError) return
-
-  // Fallback to direct update (works for session creator)
   const { error } = await supabase
     .from("sessions")
-    .update({ focus_level: focusLevel })
+    .update({ focus_level: focusLevel } as any)
     .eq("id", sessionId)
 
   if (error) {
@@ -359,6 +349,45 @@ export async function analyzeMessagesFocus(messages: string[]): Promise<{
       focus_level: 100,
       probabilities: [],
       message_count: 0,
+      error: error instanceof Error ? error.message : "Unknown error",
+      fallback: true,
+    }
+  }
+}
+
+/**
+ * Classify issue text for priority and tags using ML model
+ * @param text - Issue description text
+ * @returns Classification with priority and tags
+ */
+export async function classifyIssue(text: string): Promise<{
+  priority: "high" | "medium" | "low"
+  priority_confidence: number
+  tags: string[]
+  all_tag_scores: Record<string, number>
+  error?: string
+  fallback?: boolean
+}> {
+  try {
+    const response = await fetch("/api/issues/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Issues API returned ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("[classifyIssue] Error:", error)
+    // Return default classification on error
+    return {
+      priority: "medium",
+      priority_confidence: 0.5,
+      tags: [],
+      all_tag_scores: {},
       error: error instanceof Error ? error.message : "Unknown error",
       fallback: true,
     }
