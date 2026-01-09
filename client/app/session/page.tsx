@@ -712,7 +712,7 @@ export default function SessionPage() {
     }
   }
 
-  const handleSessionEnd = useCallback(() => {
+  const handleSessionEnd = useCallback(async () => {
     setExpandedWidgets(new Set())
     setSessionStatus("ended")
 
@@ -746,18 +746,22 @@ export default function SessionPage() {
       endedAt: new Date().toISOString(),
     }
 
-    // Generate summary asynchronously and add to outcome
-    summarizeSession(messageContents, 5).then((result) => {
-      if (result.success && result.summary) {
-        outcomeData.summary = result.summary
+    // Generate summary and wait for it before navigating
+    try {
+      if (messageContents.length > 0) {
+        const result = await summarizeSession(messageContents, 5)
+        if (result.success && result.summary) {
+          outcomeData.summary = result.summary
+        }
       }
-      sessionStorage.setItem("z3ro-outcome", JSON.stringify(outcomeData))
-      router.push("/outcome")
-    }).catch(() => {
-      // Fallback: store outcome without summary
-      sessionStorage.setItem("z3ro-outcome", JSON.stringify(outcomeData))
-      router.push("/outcome")
-    })
+    } catch (error) {
+      console.error("Summarization failed:", error)
+      // Continue without summary
+    }
+
+    // Store and navigate after summary is complete
+    sessionStorage.setItem("z3ro-outcome", JSON.stringify(outcomeData))
+    router.push("/outcome")
   }, [widgets, sessionData, router, messages])
 
   const handleExecuteCommand = useCallback(

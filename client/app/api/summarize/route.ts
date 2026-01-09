@@ -84,6 +84,10 @@ export async function POST(req: Request) {
     // Execute Python script
     const result = await runPythonScript(args)
 
+    // Ensure message_count is set
+    result.message_count = body.messages.length
+    result.max_sentences = payload.max_sentences
+
     console.log("[Summarize API] Result:", result)
 
     return NextResponse.json(result)
@@ -131,13 +135,23 @@ function runPythonScript(args: string[]): Promise<SummarizeResult> {
     python.on("close", (code) => {
       try {
         // Try to parse JSON output
-        const result = JSON.parse(stdout)
+        const pythonResult = JSON.parse(stdout)
         
-        if (code !== 0 && !result.success) {
+        if (code !== 0) {
           console.warn("[Summarize API] Process exited with code", code)
         }
         
-        resolve(result as SummarizeResult)
+        // Build complete result with all required fields
+        const result: SummarizeResult = {
+          summary: pythonResult.summary || "",
+          message_count: pythonResult.message_count || 0,
+          max_sentences: pythonResult.max_sentences || 5,
+          success: !pythonResult.error && !!pythonResult.summary,
+          error: pythonResult.error || undefined,
+          fallback: pythonResult.fallback || false,
+        }
+        
+        resolve(result)
       } catch (e) {
         console.error("[Summarize API] Failed to parse output:", stdout)
         reject(new Error(`Failed to parse summarizer output: ${e}`))
