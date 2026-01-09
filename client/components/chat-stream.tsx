@@ -143,9 +143,9 @@ export function ChatStream({ messages }: ChatStreamProps) {
   const isUserType = (type: MessageType) => type === "user" || type === "creator"
 
   return (
-    <div className="flex flex-col h-full min-w-0 relative bg-[#09090b]">
+    <div className="flex flex-col h-full min-w-0 relative bg-[#09090b] overflow-hidden">
       {/* Minimal header - conversation focused */}
-      <div className="flex items-center justify-between h-11 px-5 border-b border-[#18181b] bg-[#09090b]/80 backdrop-blur-sm">
+      <div className="flex-shrink-0 flex items-center justify-between h-11 px-5 border-b border-[#18181b] bg-[#09090b]/80 backdrop-blur-sm">
         <div className="flex items-center gap-2.5">
           <div className="flex items-center justify-center h-6 w-6 rounded-md bg-[#18181b]">
             <MessageSquare className="h-3.5 w-3.5 text-[#52525b]" />
@@ -179,7 +179,7 @@ export function ChatStream({ messages }: ChatStreamProps) {
       )}
 
       {/* Messages area - the primary focus */}
-      <ScrollArea ref={scrollRef} className="flex-1" onScrollCapture={handleScroll}>
+      <ScrollArea ref={scrollRef} className="flex-1 min-h-0" onScrollCapture={handleScroll}>
         <div 
           className="px-5 py-6 space-y-5 max-w-3xl mx-auto" 
           role="log" 
