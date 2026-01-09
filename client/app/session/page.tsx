@@ -39,6 +39,7 @@ import {
   getIssues
 } from "@/lib/supabase/widgets"
 import { toTimeLabel } from "@/lib/supabase/helpers"
+import { summarizeSession } from "@/lib/summarizer"
 
 interface SessionData {
   id: string
@@ -722,7 +723,20 @@ export default function SessionPage() {
     const decisionWidgets = widgets.filter((w) => w.type === "decision")
     const issueWidgets = widgets.filter((w) => w.type === "issues")
 
-    const outcomeData = {
+    // Extract message content for summarization
+    const messageContents = messages
+      .filter((m) => m.type === "user" || m.type === "creator")
+      .map((m) => `${m.author}: ${m.content}`)
+
+    const outcomeData: {
+      session: SessionData | null
+      completedTasks: string[]
+      incompleteTasks: string[]
+      decisions: string[]
+      issues: string[]
+      endedAt: string
+      summary?: string
+    } = {
       session: sessionData,
       completedTasks: allTasks.filter((t) => t.completed).map((t) => t.text),
       incompleteTasks: allTasks.filter((t) => !t.completed).map((t) => t.text),
@@ -734,9 +748,19 @@ export default function SessionPage() {
       endedAt: new Date().toISOString(),
     }
 
-    sessionStorage.setItem("z3ro-outcome", JSON.stringify(outcomeData))
-    router.push("/outcome")
-  }, [widgets, sessionData, router])
+    // Generate summary asynchronously and add to outcome
+    summarizeSession(messageContents, 5).then((result) => {
+      if (result.success && result.summary) {
+        outcomeData.summary = result.summary
+      }
+      sessionStorage.setItem("z3ro-outcome", JSON.stringify(outcomeData))
+      router.push("/outcome")
+    }).catch(() => {
+      // Fallback: store outcome without summary
+      sessionStorage.setItem("z3ro-outcome", JSON.stringify(outcomeData))
+      router.push("/outcome")
+    })
+  }, [widgets, sessionData, router, messages])
 
   const handleExecuteCommand = useCallback(
     async (command: string, args?: string) => {

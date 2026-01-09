@@ -33,6 +33,7 @@ interface OutcomeData {
   decisions: string[]
   issues: string[]
   endedAt: string
+  summary?: string
 }
 
 export default function OutcomePage() {
@@ -53,7 +54,7 @@ export default function OutcomePage() {
   const generateMarkdown = () => {
     if (!outcomeData) return ""
 
-    const { session, completedTasks, incompleteTasks, decisions, issues, endedAt } = outcomeData
+    const { session, completedTasks, incompleteTasks, decisions, issues, endedAt, summary } = outcomeData
 
     return `# Session Summary: ${session.name}
 
@@ -64,7 +65,14 @@ export default function OutcomePage() {
 ## Agenda
 ${session.agenda}
 
-## Completed Tasks (${completedTasks.length})
+${
+  summary
+    ? `## Session Summary
+${summary}
+
+`
+    : ""
+}## Completed Tasks (${completedTasks.length})
 ${completedTasks.map((t) => `- [x] ${t}`).join("\n") || "- None"}
 
 ## Incomplete Tasks (${incompleteTasks.length})
@@ -206,6 +214,19 @@ ${issues.length > 0 ? `- ${issues.length} issue(s) require attention before next
               </div>
               <p style={{ color: "#FFFFFF" }}>{session.agenda}</p>
             </div>
+
+            {/* Session Summary */}
+            {outcomeData.summary && (
+              <div className="p-4 rounded border-l-2" style={{ backgroundColor: "#1A1A1A", borderColor: "#10B981" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Lightbulb className="h-4 w-4" style={{ color: "#10B981" }} />
+                  <span className="font-mono text-xs uppercase" style={{ color: "#10B981" }}>
+                    Session Summary
+                  </span>
+                </div>
+                <p style={{ color: "#FFFFFF", lineHeight: "1.6" }}>{outcomeData.summary}</p>
+              </div>
+            )}
 
             {/* Stats overview */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
