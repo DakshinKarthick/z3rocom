@@ -54,7 +54,7 @@ interface SessionData {
 export default function SessionPage() {
   const router = useRouter()
   const [lockState, setLockState] = useState<LockState>("none")
-  const [distractionLevel, setDistractionLevel] = useState(0) // 0 = fully focused (100 - focus_level)
+  const [focusLevel, setFocusLevel] = useState(100) // 0-100, from API focus_level
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("idle")
   const [lastCommand, setLastCommand] = useState("")
   const [timeRemaining, setTimeRemaining] = useState("")
@@ -163,8 +163,8 @@ export default function SessionPage() {
         setPinnedAgenda(session.agenda)
         setTimerMinutes(session.duration_minutes)
         setTimerEndsAtState(session.timer_ends_at)
-        // Convert focus_level (100=focused) to distraction (100=distracted)
-        setDistractionLevel(100 - (session.focus_level ?? 100))
+        // Set focus level directly (0-100)
+        setFocusLevel(session.focus_level ?? 100)
         setSessionStatus("active")
         setSessionStartTime(new Date(session.created_at))
 
@@ -371,8 +371,8 @@ export default function SessionPage() {
               setPinnedAgenda(next.agenda)
               setTimerEndsAtState(next.timer_ends_at)
               if (next.focus_level !== undefined) {
-                // Convert focus_level (100=focused) to distraction (100=distracted)
-                setDistractionLevel(100 - next.focus_level)
+                // Set focus level directly (0-100)
+                setFocusLevel(next.focus_level)
               }
             }
           })
@@ -682,10 +682,8 @@ export default function SessionPage() {
             // Check if we got a valid focus_level (even with fallback, it has a value)
             if (typeof result.focus_level === "number") {
               // Update local state immediately for responsive UI
-              // Convert focus_level (100=focused) to distraction (100=distracted)
-              const newDistractionLevel = 100 - result.focus_level
-              setDistractionLevel(newDistractionLevel)
-              console.log("[Focus] Updated distraction level:", newDistractionLevel, result.fallback ? "(fallback)" : "")
+              setFocusLevel(result.focus_level)
+              console.log("[Focus] Updated focus level:", result.focus_level, result.fallback ? "(fallback)" : "")
               
               // Only update database if it's not a fallback result
               if (!result.fallback) {
@@ -1113,10 +1111,6 @@ export default function SessionPage() {
     [sessionData, addSystemMessage],
   )
 
-  const handleDistractionChange = useCallback((level: number) => {
-    setDistractionLevel(level)
-  }, [])
-
   const toggleWidget = useCallback((id: string) => {
     setExpandedWidgets((prev) => {
       const newSet = new Set(prev)
@@ -1253,8 +1247,7 @@ export default function SessionPage() {
         pinnedAgenda={pinnedAgenda}
         onAgendaChange={handleAgendaChange}
         onTimerSetMinutes={handleTimerSetMinutes}
-        distractionLevel={distractionLevel}
-        onDistractionChange={handleDistractionChange}
+        focusLevel={focusLevel}
         lockState={lockState}
         onSessionEnd={handleSessionEnd}
         sessionStatus={sessionStatus}

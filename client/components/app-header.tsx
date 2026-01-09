@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Check, Lock, Terminal, Activity, Target, Menu } from "lucide-react"
+import { Check, Lock, Terminal, Target, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -14,8 +14,7 @@ interface AppHeaderProps {
   pinnedAgenda?: string
   onAgendaChange?: (agenda: string) => void
   onTimerSetMinutes?: (minutes: number) => void
-  distractionLevel?: number
-  onDistractionChange?: (level: number) => void
+  focusLevel?: number
   lockState?: LockState
   onSessionEnd?: () => void
   sessionStatus?: SessionStatus
@@ -29,8 +28,7 @@ export function AppHeader({
   pinnedAgenda = "",
   onAgendaChange,
   onTimerSetMinutes,
-  distractionLevel = 15,
-  onDistractionChange,
+  focusLevel = 100,
   lockState = "none",
   onSessionEnd,
   sessionStatus = "idle",
@@ -145,15 +143,15 @@ export function AppHeader({
   const getMeterColor = () => {
     if (lockState === "hard") return "#ef4444"
     if (lockState === "soft") return "#f59e0b"
-    if (distractionLevel < 30) return "#10b981"
-    if (distractionLevel < 60) return "#f59e0b"
+    if (focusLevel >= 70) return "#10b981"
+    if (focusLevel >= 40) return "#f59e0b"
     return "#ef4444"
   }
 
   const getMeterGlowClass = () => {
     if (lockState === "hard") return "glow-red-pulse"
     if (lockState === "soft") return "glow-amber"
-    if (distractionLevel >= 60) return "glow-red"
+    if (focusLevel < 40) return "glow-red"
     return ""
   }
 
@@ -260,7 +258,7 @@ export function AppHeader({
         </div>
       </div>
 
-      {/* Right: Status + Distraction Meter */}
+      {/* Right: Status + Focus Meter */}
       <div className="flex items-center gap-4 flex-1 justify-end">
         {/* Status indicator */}
         <div className="hidden sm:flex items-center gap-2">
@@ -273,24 +271,26 @@ export function AppHeader({
           </span>
         </div>
 
-        {/* Distraction Meter - THICKER 8px bar */}
+        {/* Focus Meter */}
         <div className="flex items-center gap-3">
-          <Activity className="h-3.5 w-3.5 text-[#52525b]" />
+          <span className="font-mono text-xs font-bold tabular-nums" style={{ color: getMeterColor() }}>
+            {focusLevel}%
+          </span>
 
           <div
             className={`relative w-28 h-2 rounded-full overflow-hidden ${getMeterGlowClass()}`}
             style={{ backgroundColor: "#1a1a1f" }}
             role="progressbar"
-            aria-valuenow={distractionLevel}
+            aria-valuenow={focusLevel}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Distraction level"
+            aria-label="Focus level"
           >
             {/* Fill */}
             <div
               className="absolute top-0 left-0 h-full rounded-full meter-fill"
               style={{
-                width: `${distractionLevel}%`,
+                width: `${focusLevel}%`,
                 backgroundColor: getMeterColor(),
               }}
             />
@@ -306,28 +306,7 @@ export function AppHeader({
             </div>
           </div>
 
-          <span className="font-mono text-xs font-bold tabular-nums w-8 text-right" style={{ color: getMeterColor() }}>
-            {distractionLevel}%
-          </span>
-        </div>
-
-        {/* Debug controls - hidden on mobile */}
-        <div className="hidden lg:flex gap-1 opacity-30 hover:opacity-100 transition-opacity">
-          {[
-            { level: 20, label: "L" },
-            { level: 65, label: "M" },
-            { level: 85, label: "H" },
-          ].map(({ level, label }) => (
-            <Button
-              key={level}
-              onClick={() => onDistractionChange?.(level)}
-              size="sm"
-              variant="ghost"
-              className="h-5 w-5 p-0 text-xs font-mono text-[#3f3f46] hover:text-[#52525b]"
-            >
-              {label}
-            </Button>
-          ))}
+          <span className="hidden sm:inline font-mono text-[10px] text-[#52525b] tracking-wider">L M H</span>
         </div>
       </div>
     </header>
