@@ -15,9 +15,19 @@ import {
   Copy,
   X,
   Check,
+  Sparkles,
+  HelpCircle,
+  User,
+  Calendar,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+
+interface ActionItem {
+  task: string
+  assignee?: string | null
+  deadline?: string | null
+}
 
 interface OutcomeData {
   session: {
@@ -34,6 +44,9 @@ interface OutcomeData {
   issues: string[]
   endedAt: string
   summary?: string
+  aiActionItems?: ActionItem[]
+  aiDecisions?: string[]
+  aiOpenQuestions?: string[]
 }
 
 export default function OutcomePage() {
@@ -54,7 +67,7 @@ export default function OutcomePage() {
   const generateMarkdown = () => {
     if (!outcomeData) return ""
 
-    const { session, completedTasks, incompleteTasks, decisions, issues, endedAt, summary } = outcomeData
+    const { session, completedTasks, incompleteTasks, decisions, issues, endedAt, summary, aiActionItems, aiDecisions, aiOpenQuestions } = outcomeData
 
     return `# Session Summary: ${session.name}
 
@@ -69,6 +82,27 @@ ${
   summary
     ? `## Session Summary
 ${summary}
+
+`
+    : ""
+}${
+  aiActionItems && aiActionItems.length > 0
+    ? `## AI-Extracted Action Items
+${aiActionItems.map((a) => `- [ ] ${a.task}${a.assignee ? ` (@${a.assignee})` : ""}${a.deadline ? ` - Due: ${a.deadline}` : ""}`).join("\n")}
+
+`
+    : ""
+}${
+  aiDecisions && aiDecisions.length > 0
+    ? `## AI-Extracted Decisions
+${aiDecisions.map((d) => `- ${d}`).join("\n")}
+
+`
+    : ""
+}${
+  aiOpenQuestions && aiOpenQuestions.length > 0
+    ? `## Open Questions
+${aiOpenQuestions.map((q) => `- ${q}`).join("\n")}
 
 `
     : ""
@@ -225,6 +259,102 @@ ${issues.length > 0 ? `- ${issues.length} issue(s) require attention before next
                   </span>
                 </div>
                 <p style={{ color: "#FFFFFF", lineHeight: "1.6" }}>{outcomeData.summary}</p>
+              </div>
+            )}
+
+            {/* AI-Extracted Action Items */}
+            {outcomeData.aiActionItems && outcomeData.aiActionItems.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" style={{ color: "#A855F7" }} />
+                  <h2 className="font-mono text-sm uppercase" style={{ color: "#A855F7" }}>
+                    AI-Extracted Action Items ({outcomeData.aiActionItems.length})
+                  </h2>
+                </div>
+                <div className="space-y-2">
+                  {outcomeData.aiActionItems.map((action, i) => (
+                    <div
+                      key={i}
+                      className="p-3 rounded border-l-2"
+                      style={{ backgroundColor: "#1A1A1A", borderColor: "#A855F7" }}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm shrink-0 mt-0.5" style={{ color: "#A855F7" }}>
+                          →
+                        </span>
+                        <div className="flex-1">
+                          <span className="text-sm" style={{ color: "#FFFFFF" }}>
+                            {action.task}
+                          </span>
+                          <div className="flex flex-wrap gap-3 mt-1.5">
+                            {action.assignee && (
+                              <span className="flex items-center gap-1 text-xs" style={{ color: "#A1A1AA" }}>
+                                <User className="h-3 w-3" />
+                                {action.assignee}
+                              </span>
+                            )}
+                            {action.deadline && (
+                              <span className="flex items-center gap-1 text-xs" style={{ color: "#A1A1AA" }}>
+                                <Calendar className="h-3 w-3" />
+                                {action.deadline}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI-Extracted Decisions */}
+            {outcomeData.aiDecisions && outcomeData.aiDecisions.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" style={{ color: "#06B6D4" }} />
+                  <h2 className="font-mono text-sm uppercase" style={{ color: "#06B6D4" }}>
+                    AI-Extracted Decisions ({outcomeData.aiDecisions.length})
+                  </h2>
+                </div>
+                <div className="space-y-1">
+                  {outcomeData.aiDecisions.map((decision, i) => (
+                    <div
+                      key={i}
+                      className="p-2 rounded border-l-2"
+                      style={{ backgroundColor: "#1A1A1A", borderColor: "#06B6D4" }}
+                    >
+                      <span className="text-sm" style={{ color: "#A1A1AA" }}>
+                        {decision}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI-Extracted Open Questions */}
+            {outcomeData.aiOpenQuestions && outcomeData.aiOpenQuestions.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <HelpCircle className="h-4 w-4" style={{ color: "#F59E0B" }} />
+                  <h2 className="font-mono text-sm uppercase" style={{ color: "#F59E0B" }}>
+                    Open Questions ({outcomeData.aiOpenQuestions.length})
+                  </h2>
+                </div>
+                <div className="space-y-1">
+                  {outcomeData.aiOpenQuestions.map((question, i) => (
+                    <div
+                      key={i}
+                      className="p-2 rounded border-l-2"
+                      style={{ backgroundColor: "#1A1A1A", borderColor: "#F59E0B" }}
+                    >
+                      <span className="text-sm" style={{ color: "#A1A1AA" }}>
+                        {question}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

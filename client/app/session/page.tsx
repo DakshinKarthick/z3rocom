@@ -40,6 +40,7 @@ import {
 } from "@/lib/supabase/widgets"
 import { toTimeLabel } from "@/lib/supabase/helpers"
 import { summarizeSession } from "@/lib/summarizer"
+import { extractSessionActions, type ActionItem } from "@/lib/action-extractor"
 
 interface SessionData {
   id: string
@@ -734,6 +735,9 @@ export default function SessionPage() {
       issues: string[]
       endedAt: string
       summary?: string
+      aiActionItems?: ActionItem[]
+      aiDecisions?: string[]
+      aiOpenQuestions?: string[]
     } = {
       session: sessionData,
       completedTasks: allTasks.filter((t) => t.completed).map((t) => t.text),
@@ -746,17 +750,27 @@ export default function SessionPage() {
       endedAt: new Date().toISOString(),
     }
 
-    // Generate summary and wait for it before navigating
+    // Generate summary and extract actions in parallel
     try {
       if (messageContents.length > 0) {
-        const result = await summarizeSession(messageContents, 5)
-        if (result.success && result.summary) {
-          outcomeData.summary = result.summary
+        const [summaryResult, actionsResult] = await Promise.all([
+          summarizeSession(messageContents, 5),
+          extractSessionActions(messageContents, sessionData?.name, sessionData?.agenda),
+        ])
+        
+        if (summaryResult.success && summaryResult.summary) {
+          outcomeData.summary = summaryResult.summary
+        }
+        
+        if (actionsResult.success) {
+          outcomeData.aiActionItems = actionsResult.actionItems
+          outcomeData.aiDecisions = actionsResult.decisions
+          outcomeData.aiOpenQuestions = actionsResult.openQuestions
         }
       }
     } catch (error) {
-      console.error("Summarization failed:", error)
-      // Continue without summary
+      console.error("AI analysis failed:", error)
+      // Continue without AI-generated content
     }
 
     // Store and navigate after summary is complete
