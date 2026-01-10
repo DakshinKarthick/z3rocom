@@ -1,11 +1,10 @@
-import { spawn } from "child_process"
 import { NextResponse } from "next/server"
-import path from "path"
-import fs from "fs"
 
-// Path to the Python worker script
-const WORKER_DIR = path.resolve(process.cwd(), "..", "worker")
-const WORKER_PATH = path.join(WORKER_DIR, "summarizer_worker.py")
+// Azure OpenAI configuration from environment
+const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT
+const AZURE_OPENAI_API_KEY = process.env.AZURE_OPENAI_API_KEY
+const AZURE_OPENAI_DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-4o-mini"
+const AZURE_OPENAI_API_VERSION = process.env.AZURE_OPENAI_API_VERSION || "2024-08-01-preview"
 
 interface SummarizeRequest {
   messages?: string[]
@@ -22,7 +21,7 @@ interface SummarizeResult {
 }
 
 /**
- * Summarize session messages using Sumy LexRank algorithm
+ * Summarize session messages using Azure OpenAI
  * 
  * POST /api/summarize
  * Body: { messages: string[], max_sentences?: number }
@@ -41,52 +40,46 @@ export async function POST(req: Request) {
       )
     }
 
+    const maxSentences = Math.min(Math.max(body.max_sentences || 5, 1), 10)
+
     if (body.messages.length === 0) {
       return NextResponse.json({
         summary: "",
         message_count: 0,
-        max_sentences: body.max_sentences || 5,
+        max_sentences: maxSentences,
         success: true,
       })
     }
 
-    // Check if worker script exists
-    if (!fs.existsSync(WORKER_PATH)) {
-      console.error("[Summarize API] Worker script not found at:", WORKER_PATH)
+    // Check Azure OpenAI configuration
+    if (!AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_API_KEY) {
+      console.error("[Summarize API] Missing Azure OpenAI configuration")
       return NextResponse.json({
         summary: "",
         message_count: body.messages.length,
-        max_sentences: body.max_sentences || 5,
+        max_sentences: maxSentences,
         success: false,
-        error: `Worker script not found at ${WORKER_PATH}`,
+        error: "Azure OpenAI not configured. Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY.",
         fallback: true
       })
     }
 
-    // Build command arguments
-    const args: string[] = [WORKER_PATH]
-    
-    // Prepare JSON payload
-    const payload = {
-      messages: body.messages,
-      max_sentences: Math.min(Math.max(body.max_sentences || 5, 1), 10)
-    }
-    
-    args.push("--summarize-json", JSON.stringify(payload))
-
     console.log(
-      "[Summarize API] Running summarizer with",
+      "[Summarize API] Summarizing",
       body.messages.length,
-      "messages, max_sentences:",
-      payload.max_sentences
+      "messages with Azure OpenAI, max_sentences:",
+      maxSentences
     )
 
-    // Execute Python script
-    const result = await runPythonScript(args)
+    // Call Azure OpenAI
+    const summary = await summarizeWithAzureOpenAI(body.messages, maxSentences)
 
-    // Ensure message_count is set
-    result.message_count = body.messages.length
-    result.max_sentences = payload.max_sentences
+    const result: SummarizeResult = {
+      summary,
+      message_count: body.messages.length,
+      max_sentences: maxSentences,
+      success: true,
+    }
 
     console.log("[Summarize API] Result:", result)
 
@@ -94,7 +87,6 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("[Summarize API] Error:", error)
 
-    // Return error response
     return NextResponse.json({
       summary: "",
       message_count: 0,
@@ -106,61 +98,56 @@ export async function POST(req: Request) {
   }
 }
 
-function runPythonScript(args: string[]): Promise<SummarizeResult> {
-  return new Promise((resolve, reject) => {
-    // Spawn Python process
-    const python = spawn("python", args, {
-      cwd: WORKER_DIR,
-      env: {
-        ...process.env,
-        PYTHONIOENCODING: "utf-8",
-      },
-    })
+/**
+ * Call Azure OpenAI Chat Completions API for summarization
+ */
+async function summarizeWithAzureOpenAI(messages: string[], maxSentences: number): Promise<string> {
+  // Combine messages into a single text block
+  const chatContent = messages
+    .filter(m => m && m.trim().length > 0)
+    .map((m, i) => `[${i + 1}] ${m}`)
+    .join("\n")
 
-    let stdout = ""
-    let stderr = ""
+  const systemPrompt = `You are a concise summarizer for team chat sessions. 
+Summarize the key discussion points, decisions made, and action items from the chat messages.
+Keep the summary to ${maxSentences} sentences maximum.
+Focus on: topics discussed, conclusions reached, and any tasks or next steps mentioned.
+Be direct and factual. Do not include pleasantries or filler.`
 
-    // Capture stdout
-    python.stdout?.on("data", (data) => {
-      stdout += data.toString()
-    })
+  const userPrompt = `Summarize this chat session:\n\n${chatContent}`
 
-    // Capture stderr
-    python.stderr?.on("data", (data) => {
-      stderr += data.toString()
-      console.log("[Summarize API] stderr:", data.toString())
-    })
+  // Build Azure OpenAI API URL
+  const url = `${AZURE_OPENAI_ENDPOINT}/openai/deployments/${AZURE_OPENAI_DEPLOYMENT}/chat/completions?api-version=${AZURE_OPENAI_API_VERSION}`
 
-    // Handle process completion
-    python.on("close", (code) => {
-      try {
-        // Try to parse JSON output
-        const pythonResult = JSON.parse(stdout)
-        
-        if (code !== 0) {
-          console.warn("[Summarize API] Process exited with code", code)
-        }
-        
-        // Build complete result with all required fields
-        const result: SummarizeResult = {
-          summary: pythonResult.summary || "",
-          message_count: pythonResult.message_count || 0,
-          max_sentences: pythonResult.max_sentences || 5,
-          success: !pythonResult.error && !!pythonResult.summary,
-          error: pythonResult.error || undefined,
-          fallback: pythonResult.fallback || false,
-        }
-        
-        resolve(result)
-      } catch (e) {
-        console.error("[Summarize API] Failed to parse output:", stdout)
-        reject(new Error(`Failed to parse summarizer output: ${e}`))
-      }
-    })
-
-    python.on("error", (err) => {
-      console.error("[Summarize API] Process error:", err)
-      reject(err)
-    })
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-key": AZURE_OPENAI_API_KEY!,
+    },
+    body: JSON.stringify({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      max_tokens: 500,
+      temperature: 0.3, // Lower temperature for more focused summaries
+    }),
   })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error("[Azure OpenAI] Error response:", response.status, errorText)
+    throw new Error(`Azure OpenAI API error: ${response.status} - ${errorText}`)
+  }
+
+  const data = await response.json()
+  
+  const summary = data.choices?.[0]?.message?.content?.trim() || ""
+  
+  if (!summary) {
+    throw new Error("Azure OpenAI returned empty response")
+  }
+
+  return summary
 }
