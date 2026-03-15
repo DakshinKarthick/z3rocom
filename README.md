@@ -39,7 +39,7 @@ See [docs/developer-setup.md](docs/developer-setup.md) for installation and deve
 
 ```
 ├── client/              # Next.js + React frontend
-├── server/              # Fastify + Socket.IO backend
+├── worker/              # ml model + backend
 └── docs/                # Project documentation
 ```
 
